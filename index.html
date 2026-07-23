@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game Jam Planner</title>
+     <link rel="icon" href="/favicon.ico" sizes="any">
     <style>
       :root {
         --bg: #0f1115;
@@ -686,12 +687,34 @@
       .team-row .badge {
         margin-left: auto;
       }
+
+      .sync-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .sync-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: inline-block;
+      }
+      .sync-dot.checking {
+        background: #60a5fa;
+        animation: sync-pulse 1s infinite alternate;
+      }
+      @keyframes sync-pulse {
+        from { opacity: 0.3; }
+        to { opacity: 1; }
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
 
-    <!-- React 18 (UMD) + Babel standalone for in-browser JSX/TS. No build step. -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -701,20 +724,6 @@
       // =====================================================================
       // CONFIG
       // =====================================================================
-      // Fill these in once you've registered a classic GitHub OAuth App with
-      // Device Flow enabled (Settings > Developer settings > OAuth Apps >
-      // your app > Enable Device Flow). CLIENT_ID is public and safe to ship
-      // in this file.
-      //
-      // RELAY_BASE_URL points at a tiny stateless CORS relay, because GitHub's
-      // /login/device/code and /login/oauth/access_token endpoints don't send
-      // CORS headers, so a browser can't call them directly. The relay just
-      // forwards the POST and adds `Access-Control-Allow-Origin: *` — it never
-      // sees a client secret, since Device Flow doesn't use one.
-      //
-      // scopes: OAuth Apps (unlike GitHub Apps) DO use scopes, requested here
-      // at login time. "repo" grants read/write on private + public repos,
-      // which is what the Contents API calls need for .gamejam/*.json.
       const CONFIG = {
         clientId: "Ov23liy7kjuppgIY5yU1",
         relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
@@ -741,10 +750,8 @@
         Unknown: "unknown",
       };
 
-      // AuthenticatedUser shape: { login, name, avatarUrl, accessToken }
-
       // =====================================================================
-      // AUTH: GitHub Device Flow, via plain fetch through the CORS relay
+      // AUTH: GitHub Device Flow
       // =====================================================================
       const SESSION_KEY = "gamejam-planner:github-session";
 
@@ -784,7 +791,6 @@
           try {
             this.setState({ status: AuthStatus.AwaitingDeviceCode });
             const deviceCode = await this.requestDeviceCode();
-
             this.setState({
               status: AuthStatus.AwaitingUserVerification,
               userCode: deviceCode.user_code,
@@ -792,10 +798,8 @@
               verificationUriComplete: deviceCode.verification_uri_complete || deviceCode.verification_uri,
               expiresInSeconds: deviceCode.expires_in,
             });
-
             const accessToken = await this.pollForToken(deviceCode, this.pollAbort.signal);
             this.setState({ status: AuthStatus.Polling });
-
             const user = await this.fetchAuthenticatedUser(accessToken);
             sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
             this.setState({ status: AuthStatus.SignedIn, user });
@@ -825,11 +829,9 @@
         async pollForToken(deviceCode, signal) {
           let intervalMs = Math.max(deviceCode.interval * 1000, 5000);
           const deadline = Date.now() + deviceCode.expires_in * 1000;
-
           while (Date.now() < deadline) {
             if (signal.aborted) throw new DOMException("Login cancelled", "AbortError");
             await sleep(intervalMs, signal);
-
             const res = await fetch(`${CONFIG.relayBaseUrl}/login/oauth/access_token`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -841,9 +843,7 @@
             });
             if (!res.ok) throw new Error(`relay:Token poll failed (${res.status})`);
             const body = await res.json();
-
             if (body.access_token) return body.access_token;
-
             switch (body.error) {
               case "authorization_pending": continue;
               case "slow_down": intervalMs += 5000; continue;
@@ -865,7 +865,9 @@
         }
 
         async verifyToken(accessToken) {
-          const res = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${accessToken}` } });
+          const res = await fetch("https://api.github.com/user", {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
           return res.ok;
         }
 
@@ -882,26 +884,18 @@
       function sleep(ms, signal) {
         return new Promise((resolve, reject) => {
           const t = setTimeout(resolve, ms);
-          signal.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Login cancelled", "AbortError")); }, { once: true });
+          signal.addEventListener("abort", () => {
+            clearTimeout(t);
+            reject(new DOMException("Login cancelled", "AbortError"));
+          }, { once: true });
         });
       }
 
       // =====================================================================
-      // STORAGE: domain types (documented as shapes, JS has no interfaces)
+      // STORAGE
       // =====================================================================
       const CardStatus = { Backlog: "backlog", InProgress: "in-progress", Blocked: "blocked", Done: "done" };
       const StorageProviderKind = { GitHub: "github", LocalFolder: "local-folder" };
-
-      // ProjectManifest: { id, name, description, jam, theme, createdAt,
-      //                     storage: { kind, githubOwner?, githubRepo? } }
-      // Card: { id, title, status, description, tags[], assignee, createdAt, updatedAt }
-      // Board: { columns: [{ id, status, cardIds[] }] }
-
-      // =====================================================================
-      // STORAGE: GitHubStorage — plain fetch against the REST Contents API.
-      // Git blob sha doubles as FileHandle.revision for conflict detection
-      // (a stale sha on write comes back as 409/422 from GitHub).
-      // =====================================================================
       const GAMEJAM_DIR = ".gamejam";
 
       class StorageConflictError extends Error {
@@ -916,16 +910,15 @@
 
       class GitHubStorage {
         kind = StorageProviderKind.GitHub;
-        constructor(accessToken) { this.accessToken = accessToken; }
+        constructor(accessToken) {
+          this.accessToken = accessToken;
+        }
 
         authHeaders(extra = {}) {
           return { Authorization: `Bearer ${this.accessToken}`, Accept: "application/vnd.github+json", ...extra };
         }
 
         async listUserRepos() {
-          // Classic OAuth App with "repo" scope: this single call returns
-          // every repo the user can access (owned + collaborator), no
-          // separate install step needed.
           const res = await fetch(
             "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator",
             { headers: this.authHeaders() },
@@ -935,10 +928,6 @@
         }
 
         async listCollaborators(repo) {
-          // Repo access list (admin/write/read), not commit-history
-          // "contributors" — this matches who's actually on the jam team per
-          // planning.md's Authorization section, including people who haven't
-          // committed yet. Requires push access to the repo to call.
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
             { headers: this.authHeaders() },
@@ -949,8 +938,6 @@
         }
 
         async listCollaboratorsWithPermissions(repo) {
-          // Same endpoint as listCollaborators, but keeps the permission level
-          // and avatar for the Team page instead of flattening to just logins.
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
             { headers: this.authHeaders() },
@@ -968,9 +955,6 @@
         writeTeam(repo, data, handle) { return this.putFile(repo, "team.json", data, handle, "Sync team roster"); }
 
         async listRecentActivity(repo, limit = 8) {
-          // Git history as the activity log, per planning.md's Collaboration
-          // section — scoped to .gamejam/ so this doesn't pick up unrelated
-          // commits to game source code sitting in the same repo.
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/commits?path=${GAMEJAM_DIR}&per_page=${limit}`,
             { headers: this.authHeaders() },
@@ -1002,1119 +986,1072 @@
           await this.putFile(repo, "board.json", emptyBoard, null, "Initialize game jam planner");
           await this.putFile(repo, "milestones.json", [], null, "Initialize game jam planner");
           await this.putFile(repo, "team.json", [], null, "Initialize game jam planner");
-          await this.putFile(repo, "assets.json", [], null, "Initialize game jam planner");
         }
 
-        readManifest(repo) { return this.getFile(repo, "project.json"); }
-        readBoard(repo) { return this.getFile(repo, "board.json"); }
-
-        async listCardIds(repo) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/cards`,
-            { headers: this.authHeaders() },
-          );
-          if (res.status === 404) return []; // cards/ doesn't exist yet — no cards written
-          if (!res.ok) throw new Error(`Failed to list cards (${res.status})`);
-          const entries = await res.json();
-          return (Array.isArray(entries) ? entries : [])
-            .filter((e) => e.type === "file" && e.name.endsWith(".json"))
-            .map((e) => e.name.replace(/\.json$/, ""));
-        }
-
-        readCard(repo, cardId) {
-          return this.getFile(repo, `cards/${cardId}.json`);
-        }
-
-        writeCard(repo, cardId, data, handle) {
-          return this.putFile(repo, `cards/${cardId}.json`, data, handle, `Update card: ${data.title}`);
-        }
-
-        async deleteCard(repo, cardId, handle) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/cards/${cardId}.json`,
-            {
-              method: "DELETE",
-              headers: this.authHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ message: `Remove card: ${cardId}`, sha: handle.revision }),
-            },
-          );
-          if (!res.ok) throw new Error(`Failed to delete card ${cardId} (${res.status})`);
-        }
-
-        /**
-         * Writes each dirty file independently rather than as a single atomic
-         * git tree/commit. Matches "one file per card, few conflicts" from
-         * planning.md — a true atomic multi-file commit (git trees API) is a
-         * reasonable upgrade later if autosave batches get large.
-         */
-        async commitBatch(repo, message, writes) {
-          const succeeded = [];
-          const conflicts = [];
-
-          for (const write of writes) {
-            try {
-              let handle;
-              if (write.file === "board") {
-                handle = await this.putFile(repo, "board.json", write.data, write.handle, message);
-              } else if (write.file === "card") {
-                handle = await this.writeCard(repo, write.cardId, write.data, write.handle);
-              } else {
-                continue;
-              }
-              succeeded.push(handle);
-            } catch (err) {
-              if (err instanceof StorageConflictError) {
-                conflicts.push(err);
-              } else {
-                throw err;
-              }
-            }
-          }
-
-          return { succeeded, conflicts };
-        }
-
-        async getFile(repo, relativePath) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relativePath}`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) { const err = new Error(`Failed to read ${relativePath} (${res.status})`); err.status = res.status; throw err; }
-          const body = await res.json();
-          const data = JSON.parse(decodeURIComponent(escape(atob(body.content.replace(/\n/g, "")))));
-          return { data, handle: { path: relativePath, revision: body.sha } };
-        }
-
-        async putFile(repo, relativePath, data, handle, message) {
-          const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relativePath}`,
-            {
-              method: "PUT",
-              headers: this.authHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ message, content, sha: handle ? handle.revision : undefined }),
-            },
-          );
+        async loadGameJamFiles(repo) {
+          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}`;
+          const res = await fetch(url, { headers: this.authHeaders() });
           if (!res.ok) {
-            if ((res.status === 409 || res.status === 422) && handle) {
-              const latest = await this.getFile(repo, relativePath).catch(() => null);
-              throw new StorageConflictError(relativePath, handle.revision, latest ? latest.handle.revision : "unknown");
+            const err = new Error(`Failed to list ${GAMEJAM_DIR} directory (${res.status})`);
+            err.status = res.status;
+            throw err;
+          }
+          const items = await res.json();
+          const files = {};
+          for (const item of items) {
+            if (item.type === "file") {
+              const fileRes = await fetch(item.download_url);
+              if (!fileRes.ok) continue;
+              const text = await fileRes.text();
+              try {
+                files[item.name] = { data: JSON.parse(text), sha: item.sha };
+              } catch {
+                files[item.name] = { data: text, sha: item.sha };
+              }
+            } else if (item.type === "dir" && item.name === "cards") {
+              const cardsRes = await fetch(item.url, { headers: this.authHeaders() });
+              if (cardsRes.ok) {
+                const cardItems = await cardsRes.json();
+                for (const cardItem of cardItems) {
+                  if (cardItem.type === "file") {
+                    const cRes = await fetch(cardItem.download_url);
+                    if (!cRes.ok) continue;
+                    const cText = await cRes.text();
+                    try {
+                      files[`cards/${cardItem.name}`] = { data: JSON.parse(cText), sha: cardItem.sha };
+                    } catch {
+                      files[`cards/${cardItem.name}`] = { data: cText, sha: cardItem.sha };
+                    }
+                  }
+                }
+              }
             }
-            throw new Error(`Failed to write ${relativePath} (${res.status})`);
+          }
+          return files;
+        }
+
+        async getFile(repo, relPath) {
+          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
+          const res = await fetch(url, { headers: this.authHeaders() });
+          if (!res.ok) {
+            const err = new Error(`Failed to read ${relPath} (${res.status})`);
+            err.status = res.status;
+            throw err;
           }
           const body = await res.json();
-          return { path: relativePath, revision: body.content.sha };
+          const text = decodeURIComponent(escape(atob(body.content.replace(/\n/g, ""))));
+          return { data: JSON.parse(text), handle: { revision: body.sha, path: relPath } };
+        }
+
+        async putFile(repo, relPath, data, handle, commitMessage = `Update ${relPath}`) {
+          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
+          const jsonText = JSON.stringify(data, null, 2);
+          const encoded = btoa(unescape(encodeURIComponent(jsonText)));
+          const payload = { message: commitMessage, content: encoded };
+          if (handle && handle.revision) payload.sha = handle.revision;
+
+          const res = await fetch(url, {
+            method: "PUT",
+            headers: this.authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(payload),
+          });
+
+          if (res.status === 409 || res.status === 422) {
+            let remoteSha = "unknown";
+            try {
+              const fresh = await this.getFile(repo, relPath);
+              remoteSha = fresh.handle.revision;
+            } catch {}
+            throw new StorageConflictError(relPath, handle ? handle.revision : "none", remoteSha);
+          }
+
+          if (!res.ok) throw new Error(`Failed to write ${relPath} (${res.status})`);
+          const body = await res.json();
+          return { revision: body.content.sha, path: relPath };
+        }
+
+        async deleteFile(repo, relPath, handle, commitMessage = `Delete ${relPath}`) {
+          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
+          const payload = { message: commitMessage, sha: handle.revision };
+
+          const res = await fetch(url, {
+            method: "DELETE",
+            headers: this.authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(payload),
+          });
+
+          if (res.status === 409 || res.status === 422) {
+            throw new StorageConflictError(relPath, handle.revision, "unknown");
+          }
+          if (!res.ok) throw new Error(`Failed to delete ${relPath} (${res.status})`);
         }
       }
 
       // =====================================================================
-      // WORKSPACE — dirty-state tracking, batched save, autosave.
-      // Per planning.md's "Saving Strategy": don't commit every interaction,
-      // batch changes, autosave every few minutes, meaningful commit messages.
-      // This is the plain-JS port of the Workspace design from earlier in the
-      // project (originally sketched as TS modules before the pivot to a
-      // single file) — same ideas, rewritten to live in #app-source.
+      // WORKSPACE CLASS (LOCAL-FIRST STATE & SYNC MANAGEMENT)
       // =====================================================================
       class Workspace {
-        constructor(storage, repo, autosaveIntervalMs = 3 * 60 * 1000) {
-          this.storage = storage;
+        constructor(repo, storage) {
           this.repo = repo;
-          this.autosaveIntervalMs = autosaveIntervalMs;
+          this.storage = storage;
+          this.files = new Map();
+          this.shas = new Map();
+          this.dirtyFiles = new Set();
           this.listeners = new Set();
-
-          this.manifest = null; // { data, handle }
-          this.board = null;    // { data, handle, dirty }
-          this.cards = new Map(); // id -> { data, handle, dirty, deleted }
-
-          this.saving = false;
-          this.conflicts = [];
           this.autosaveTimer = null;
+          this.pollTimer = null;
+          this.isCheckingSync = false;
+          this.isSaving = false;
+          this.hasConflict = false;
+          this.lastError = null;
         }
 
-        onChange(listener) {
+        subscribe(listener) {
           this.listeners.add(listener);
           return () => this.listeners.delete(listener);
         }
 
-        emit() {
-          this.listeners.forEach((listener) => listener());
+        notify() {
+          this.listeners.forEach((l) => l());
         }
 
         async load() {
-          const [manifestResult, boardResult, cardIds] = await Promise.all([
-            this.storage.readManifest(this.repo),
-            this.storage.readBoard(this.repo),
-            this.storage.listCardIds(this.repo),
-          ]);
+          const remoteFiles = await this.storage.loadGameJamFiles(this.repo);
+          this.files.clear();
+          this.shas.clear();
+          this.dirtyFiles.clear();
+          this.hasConflict = false;
+          this.lastError = null;
 
-          this.manifest = { data: manifestResult.data, handle: manifestResult.handle };
-          this.board = { data: boardResult.data, handle: boardResult.handle, dirty: false };
-
-          const loadedCards = await Promise.all(cardIds.map((id) => this.storage.readCard(this.repo, id)));
-          this.cards = new Map(
-            loadedCards.map((result) => [result.data.id, { data: result.data, handle: result.handle, dirty: false, deleted: false }]),
-          );
-
-          // Seed default columns on a freshly initialized, empty board so the
-          // Kanban UI has somewhere to put cards. Persisted on next save.
-          if (this.board.data.columns.length === 0) {
-            this.board.data = {
-              columns: Object.values(CardStatus).map((status) => ({ id: status, status, cardIds: [] })),
-            };
-            this.board.dirty = true;
+          for (const [path, file] of Object.entries(remoteFiles)) {
+            this.files.set(path, file.data);
+            this.shas.set(path, file.sha);
           }
-
-          this.emit();
+          this.notify();
         }
 
-        get project() {
-          const cards = {};
-          for (const [id, tracked] of this.cards) if (!tracked.deleted) cards[id] = tracked.data;
-          return { manifest: this.manifest.data, board: this.board.data, cards };
+        getProject() { return this.files.get("project.json"); }
+        getBoard() { return this.files.get("board.json") || { columns: [] }; }
+
+        getCards() {
+          const cards = [];
+          for (const [path, data] of this.files.entries()) {
+            if (path.startsWith("cards/") && path.endsWith(".json")) {
+              cards.push(data);
+            }
+          }
+          return cards;
         }
 
-        dirtyPaths() {
-          const paths = [];
-          if (this.board.dirty) paths.push("board.json");
-          for (const [id, tracked] of this.cards) if (tracked.dirty || tracked.deleted) paths.push(`cards/${id}.json`);
-          return paths;
-        }
+        getCard(id) { return this.files.get(`cards/${id}.json`); }
 
-        updateBoard(updater) {
-          this.board.data = updater(this.board.data);
-          this.board.dirty = true;
-          this.emit();
-        }
-
-        upsertCard(card) {
-          const existing = this.cards.get(card.id);
-          this.cards.set(card.id, { data: card, handle: existing ? existing.handle : null, dirty: true, deleted: false });
-          this.emit();
-        }
-
-        addCard({ title, status }) {
-          const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-          const now = new Date().toISOString();
-          const card = { id, title, status, description: "", tags: [], assignee: null, createdAt: now, updatedAt: now };
-          this.upsertCard(card);
-          this.updateBoard((board) => ({
-            columns: board.columns.map((col) => (col.status === status ? { ...col, cardIds: [...col.cardIds, id] } : col)),
-          }));
-          return card;
-        }
-
-        moveCard(cardId, toStatus) {
-          const tracked = this.cards.get(cardId);
-          if (!tracked || tracked.data.status === toStatus) return;
-          const fromStatus = tracked.data.status;
-          this.upsertCard({ ...tracked.data, status: toStatus, updatedAt: new Date().toISOString() });
-          this.updateBoard((board) => ({
-            columns: board.columns.map((col) => {
-              if (col.status === fromStatus) return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
-              if (col.status === toStatus) return { ...col, cardIds: [...col.cardIds, cardId] };
-              return col;
-            }),
-          }));
+        setCard(card) {
+          const path = `cards/${card.id}.json`;
+          this.files.set(path, card);
+          this.dirtyFiles.add(path);
+          this.notify();
         }
 
         deleteCard(cardId) {
-          const tracked = this.cards.get(cardId);
-          if (!tracked) return;
-          tracked.deleted = true;
-          this.updateBoard((board) => ({
-            columns: board.columns.map((col) => ({ ...col, cardIds: col.cardIds.filter((id) => id !== cardId) })),
-          }));
+          const path = `cards/${cardId}.json`;
+          this.files.delete(path);
+          this.dirtyFiles.add(path);
+
+          const board = this.getBoard();
+          let boardChanged = false;
+          const updatedColumns = board.columns.map((col) => {
+            if (col.cardIds.includes(cardId)) {
+              boardChanged = true;
+              return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+            }
+            return col;
+          });
+
+          if (boardChanged) {
+            this.files.set("board.json", { ...board, columns: updatedColumns });
+            this.dirtyFiles.add("board.json");
+          }
+          this.notify();
         }
 
-        /** Manual save, per planning.md: "Save manually or autosave every few minutes." */
-        async save(message = "Planning updates") {
-          if (this.saving) return;
-          this.saving = true;
-          this.emit();
+        moveCard(cardId, newStatus) {
+          const card = this.getCard(cardId);
+          if (!card) return;
 
-          try {
-            // Deletions go out first, one at a time (the Contents API delete
-            // endpoint isn't part of the batch write shape).
-            for (const [id, tracked] of this.cards) {
-              if (tracked.deleted) {
-                if (tracked.handle) {
-                  await this.storage.deleteCard(this.repo, id, tracked.handle);
-                }
-                this.cards.delete(id);
+          const updatedCard = { ...card, status: newStatus, updatedAt: new Date().toISOString() };
+          this.setCard(updatedCard);
+
+          const board = this.getBoard();
+          let boardChanged = false;
+
+          const updatedColumns = board.columns.map((col) => {
+            const hasCard = col.cardIds.includes(cardId);
+            if (col.status === newStatus) {
+              if (!hasCard) {
+                boardChanged = true;
+                return { ...col, cardIds: [...col.cardIds, cardId] };
               }
-            }
-
-            const writes = [];
-            if (this.board.dirty) writes.push({ file: "board", data: this.board.data, handle: this.board.handle });
-            for (const [id, tracked] of this.cards) {
-              if (tracked.dirty) writes.push({ file: "card", cardId: id, data: tracked.data, handle: tracked.handle });
-            }
-
-            if (writes.length > 0) {
-              const result = await this.storage.commitBatch(this.repo, message, writes);
-              for (const handle of result.succeeded) {
-                if (handle.path === "board.json") {
-                  this.board.handle = handle;
-                  this.board.dirty = false;
-                } else if (handle.path.startsWith("cards/")) {
-                  const id = handle.path.slice("cards/".length, -".json".length);
-                  const tracked = this.cards.get(id);
-                  if (tracked) { tracked.handle = handle; tracked.dirty = false; }
-                }
-              }
-              this.conflicts = result.conflicts;
             } else {
-              this.conflicts = [];
+              if (hasCard) {
+                boardChanged = true;
+                return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+              }
             }
-          } finally {
-            this.saving = false;
-            this.emit();
+            return col;
+          });
+
+          if (boardChanged) {
+            this.files.set("board.json", { ...board, columns: updatedColumns });
+            this.dirtyFiles.add("board.json");
+            this.notify();
           }
         }
 
-        /**
-         * Minimal conflict recovery: reload everything from GitHub, discarding
-         * local unsaved changes to the conflicting files. A real field-level
-         * merge (per planning.md's Sync section) is future work — this is the
-         * "prompt the user" half without the "auto-merge different fields" half.
-         */
-        async reloadDiscardingLocalChanges() {
-          await this.load();
-          this.conflicts = [];
-          this.emit();
+        async save() {
+          if (this.dirtyFiles.size === 0 || this.isSaving) return;
+          this.isSaving = true;
+          this.lastError = null;
+          this.notify();
+
+          const dirtyList = Array.from(this.dirtyFiles);
+
+          try {
+            for (const path of dirtyList) {
+              const data = this.files.get(path);
+              const sha = this.shas.get(path);
+
+              if (data === undefined) {
+                if (sha) {
+                  await this.storage.deleteFile(this.repo, path, { revision: sha, path });
+                  this.shas.delete(path);
+                }
+              } else {
+                const handle = sha ? { revision: sha, path } : null;
+                const result = await this.storage.putFile(this.repo, path, data, handle);
+                this.shas.set(path, result.revision);
+              }
+              this.dirtyFiles.delete(path);
+            }
+            this.hasConflict = false;
+          } catch (err) {
+            console.error("Save error:", err);
+            if (err instanceof StorageConflictError) {
+              this.hasConflict = true;
+            }
+            this.lastError = err.message || "Failed to save changes.";
+          } finally {
+            this.isSaving = false;
+            this.notify();
+          }
         }
 
-        startAutosave() {
+        async checkRemoteSync() {
+          if (!this.storage || !this.repo || this.isSaving || this.isCheckingSync) return;
+
+          this.isCheckingSync = true;
+          this.notify();
+
+          try {
+            const remoteFiles = await this.storage.loadGameJamFiles(this.repo);
+            let updatedClean = false;
+            let conflictDetected = false;
+
+            // Tracks files present remotely
+            const remotePaths = new Set(Object.keys(remoteFiles));
+
+            for (const [path, remoteFile] of Object.entries(remoteFiles)) {
+              const localFile = this.files.get(path);
+              const isDirty = this.dirtyFiles.has(path);
+              const localBaseSha = this.shas.get(path);
+
+              if (!localFile && !localBaseSha) {
+                // Case A/B: New file added remotely (and not locally known) -> adopt
+                this.files.set(path, remoteFile.data);
+                this.shas.set(path, remoteFile.sha);
+                updatedClean = true;
+                continue;
+              }
+
+              if (remoteFile.sha !== localBaseSha) {
+                if (!isDirty) {
+                  // Case B: Clean file updated remotely -> update local copy silently
+                  this.files.set(path, remoteFile.data);
+                  this.shas.set(path, remoteFile.sha);
+                  updatedClean = true;
+                } else {
+                  // Case D: File modified remotely AND modified locally -> conflict!
+                  conflictDetected = true;
+                }
+              }
+            }
+
+            // Check for clean files deleted remotely
+            for (const path of Array.from(this.files.keys())) {
+              if (!remotePaths.has(path)) {
+                if (!this.dirtyFiles.has(path)) {
+                  this.files.delete(path);
+                  this.shas.delete(path);
+                  updatedClean = true;
+                } else {
+                  conflictDetected = true;
+                }
+              }
+            }
+
+            if (conflictDetected) {
+              this.hasConflict = true;
+            }
+
+            if (updatedClean || conflictDetected) {
+              this.notify();
+            }
+          } catch (err) {
+            console.warn("Background polling check failed:", err);
+          } finally {
+            this.isCheckingSync = false;
+            this.notify();
+          }
+        }
+
+        startAutosave(intervalMs = 5000) {
           this.stopAutosave();
           this.autosaveTimer = setInterval(() => {
-            if (this.dirtyPaths().length > 0) this.save("Autosave").catch(() => {});
-          }, this.autosaveIntervalMs);
+            if (this.dirtyFiles.size > 0 && !this.hasConflict) {
+              this.save();
+            }
+          }, intervalMs);
         }
 
         stopAutosave() {
           if (this.autosaveTimer) clearInterval(this.autosaveTimer);
           this.autosaveTimer = null;
         }
+
+        startPolling(intervalMs = 30000) {
+          this.stopPolling();
+          this.pollTimer = setInterval(() => this.checkRemoteSync(), intervalMs);
+        }
+
+        stopPolling() {
+          if (this.pollTimer) clearInterval(this.pollTimer);
+          this.pollTimer = null;
+        }
       }
 
-      function useWorkspace(storage, repo) {
-        const workspaceRef = useRef(null);
-        if (!workspaceRef.current) workspaceRef.current = new Workspace(storage, repo);
-        const workspace = workspaceRef.current;
+      function useWorkspace(repo, storage) {
+        const [ws, setWs] = React.useState(null);
+        const [loading, setLoading] = React.useState(true);
+        const [, setTick] = React.useState(0);
 
-        const [, forceRender] = useState(0);
-        const [loading, setLoading] = useState(true);
-        const [error, setError] = useState(null);
+        React.useEffect(() => {
+          let active = true;
+          const workspace = new Workspace(repo, storage);
+          workspace.load().then(() => {
+            if (active) {
+              setWs(workspace);
+              setLoading(false);
+            }
+          });
 
-        useEffect(() => {
-          const unsubscribe = workspace.onChange(() => forceRender((n) => n + 1));
-          workspace.load()
-            .then(() => { setLoading(false); workspace.startAutosave(); })
-            .catch((err) => { setError(err.message); setLoading(false); });
-          return () => { unsubscribe(); workspace.stopAutosave(); };
-        }, [workspace]);
+          return () => {
+            active = false;
+            workspace.stopAutosave();
+            workspace.stopPolling();
+          };
+        }, [repo.owner, repo.name, storage]);
 
-        return {
-          loading,
-          error,
-          workspace,
-          project: (loading || error) ? null : workspace.project,
-          dirty: !loading && !error && workspace.dirtyPaths().length > 0,
-          saving: workspace.saving,
-          conflicts: workspace.conflicts,
-        };
+        React.useEffect(() => {
+          if (!ws) return;
+          const unsub = ws.subscribe(() => setTick((t) => t + 1));
+          ws.startAutosave(5000);
+          ws.startPolling(30000);
+
+          return () => {
+            unsub();
+            ws.stopAutosave();
+            ws.stopPolling();
+          };
+        }, [ws]);
+
+        return { ws, loading };
       }
 
       // =====================================================================
-      // UI
+      // UI: SPEECH-TO-TEXT HOOK
       // =====================================================================
-      const { useState, useEffect, useRef, useCallback } = React;
+      function useSpeechToText() {
+        const [isListening, setIsListening] = React.useState(false);
+        const [transcript, setTranscript] = React.useState("");
+        const [interimTranscript, setInterimTranscript] = React.useState("");
+        const [error, setError] = React.useState(null);
 
-      function Spinner() { return <span className="spinner" />; }
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const isSupported = Boolean(SpeechRecognition);
 
-      function LoginScreen({ auth, onSignedIn }) {
-        const [state, setState] = useState(auth.state);
+        const recognitionRef = React.useRef(null);
 
-        useEffect(() => auth.onStateChange(setState), [auth]);
+        const startListening = React.useCallback(() => {
+          if (!isSupported) {
+            setError("Speech recognition is not supported in this browser.");
+            return;
+          }
+          setError(null);
+          setTranscript("");
+          setInterimTranscript("");
 
-        useEffect(() => {
-          if (state.status === AuthStatus.SignedIn) onSignedIn(state.user);
-        }, [state]);
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
 
-        const handleLogin = () => { auth.login().catch(() => {}); };
+          recognition.onresult = (event) => {
+            let finalAcc = "";
+            let interimAcc = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const text = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalAcc += text + " ";
+              } else {
+                interimAcc += text;
+              }
+            }
+            if (finalAcc) setTranscript((prev) => (prev ? `${prev} ${finalAcc}` : finalAcc).trim());
+            setInterimTranscript(interimAcc);
+          };
+
+          recognition.onerror = (event) => {
+            setError(`Speech recognition error: ${event.error}`);
+            setIsListening(false);
+          };
+
+          recognition.onend = () => {
+            setIsListening(false);
+            setInterimTranscript("");
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+          setIsListening(true);
+        }, [isSupported, SpeechRecognition]);
+
+        const stopListening = React.useCallback(() => {
+          if (recognitionRef.current) {
+            recognitionRef.current.stop();
+          }
+        }, []);
+
+        return { isSupported, isListening, transcript, interimTranscript, error, startListening, stopListening };
+      }
+
+      // =====================================================================
+      // UI: COMPONENTS
+      // =====================================================================
+
+      function Header({ user, repo, onLogout, onBack, ws }) {
+        const isDirty = ws ? ws.dirtyFiles.size > 0 : false;
+        const isSaving = ws ? ws.isSaving : false;
+        const hasConflict = ws ? ws.hasConflict : false;
+        const isCheckingSync = ws ? ws.isCheckingSync : false;
+
+        return (
+          <header style={{ borderBottom: "1px solid var(--panel-border)", paddingBottom: "16px", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {onBack && (
+                  <button onClick={onBack} style={{ padding: "6px 12px", fontSize: "12px" }}>
+                    &larr; Switch Repo
+                  </button>
+                )}
+                <div>
+                  <h1 style={{ fontSize: "18px", margin: 0 }}>{repo ? repo.name : "Game Jam Planner"}</h1>
+                  {repo && <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>{repo.owner}</div>}
+                </div>
+              </div>
+
+              {ws && (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div className="sync-indicator">
+                    <span className={`sync-dot ${isCheckingSync ? "checking" : ""}`}></span>
+                    <span>{isCheckingSync ? "Syncing..." : isDirty ? "Unsaved changes" : "Synced"}</span>
+                  </div>
+
+                  <button
+                    onClick={() => ws.save()}
+                    disabled={!isDirty || isSaving || hasConflict}
+                    className={isDirty && !hasConflict ? "btn-primary" : ""}
+                    style={{ width: "auto", padding: "6px 16px", fontSize: "13px" }}
+                  >
+                    {isSaving ? "Saving..." : "Save Now"}
+                  </button>
+                </div>
+              )}
+
+              {user && (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <img src={user.avatarUrl} alt={user.login} style={{ width: "28px", height: "28px", borderRadius: "50%" }} />
+                  <span style={{ fontSize: "13px", fontWeight: "500" }}>{user.login}</span>
+                  <button onClick={onLogout} style={{ padding: "4px 8px", fontSize: "12px" }}>Log out</button>
+                </div>
+              )}
+            </div>
+
+            {hasConflict && (
+              <div className="error-box" style={{ marginTop: "16px", marginBottom: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span><strong>Conflict Detected:</strong> Remote changes overlap with local edits. Please reload to sync latest state.</span>
+                <button onClick={() => ws.load()} style={{ fontSize: "12px", padding: "4px 10px", backgroundColor: "var(--danger)", color: "#fff", border: "none" }}>
+                  Reload Workspace
+                </button>
+              </div>
+            )}
+          </header>
+        );
+      }
+
+      function AuthGate({ auth, children }) {
+        const [state, setState] = React.useState(auth.state);
+
+        React.useEffect(() => {
+          const unsub = auth.onStateChange(setState);
+          auth.restoreSession();
+          return unsub;
+        }, [auth]);
+
+        if (state.status === AuthStatus.SignedIn) {
+          return children(state.user);
+        }
 
         return (
           <div className="card">
-            <p className="title">Game Jam Planner</p>
-            <p className="subtitle">Local-first planning, backed by your GitHub repo.</p>
+            <h1 className="title">Game Jam Planner</h1>
+            <p className="subtitle">GitHub-backed local-first planner</p>
 
-            {state.status === AuthStatus.Error && (
-              <div className="error-box">{state.error.message}</div>
-            )}
-
-            {(state.status === AuthStatus.SignedOut || state.status === AuthStatus.Error) && (
-              <button className="btn-primary" onClick={handleLogin}>Login with GitHub</button>
+            {state.status === AuthStatus.SignedOut && (
+              <button className="btn-primary" onClick={() => auth.login()}>
+                Sign in with GitHub
+              </button>
             )}
 
             {state.status === AuthStatus.AwaitingDeviceCode && (
-              <div className="status-line"><Spinner /> Requesting a login code…</div>
+              <div className="status-line">
+                <div className="spinner"></div>
+                <span>Requesting device code...</span>
+              </div>
             )}
 
             {state.status === AuthStatus.AwaitingUserVerification && (
               <div>
-                <div className="device-code">{state.userCode}</div>
-                <p style={{ textAlign: "center", fontSize: 14, color: "var(--text-dim)" }}>
-                  Go to{" "}
-                  <a className="verify-link" href={state.verificationUriComplete} target="_blank" rel="noreferrer">
-                    {state.verificationUri}
-                  </a>{" "}
-                  and enter this code.
+                <p style={{ fontSize: "13px", color: "var(--text-dim)", margin: 0 }}>
+                  Enter this code on GitHub to authorize:
                 </p>
-                <div className="status-line"><Spinner /> Waiting for you to approve access…</div>
+                <div className="device-code">{state.userCode}</div>
+                <a
+                  href={state.verificationUriComplete}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="verify-link"
+                  style={{ display: "block", textAlign: "center", fontSize: "14px", fontWeight: "600", marginBottom: "16px" }}
+                >
+                  Open GitHub Verification Page &rarr;
+                </a>
+                <div className="status-line" style={{ justifyContent: "center" }}>
+                  <div className="spinner"></div>
+                  <span>Waiting for authorization...</span>
+                </div>
               </div>
             )}
 
-            {state.status === AuthStatus.Polling && (
-              <div className="status-line"><Spinner /> Signing you in…</div>
+            {state.status === AuthStatus.Error && (
+              <div>
+                <div className="error-box">{state.error?.message || "Authentication failed."}</div>
+                <button className="btn-primary" onClick={() => auth.login()}>
+                  Try Again
+                </button>
+              </div>
             )}
           </div>
         );
       }
 
-      function RepoList({ user, storage, onSelectRepo, onLogout }) {
-        const [repos, setRepos] = useState(null);
-        const [error, setError] = useState(null);
+      function RepoPicker({ storage, onSelectRepo, onLogout }) {
+        const [repos, setRepos] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState(null);
 
-        useEffect(() => {
-          storage.listUserRepos()
-            .then((data) => setRepos(data))
-            .catch((err) => setError(err.message));
+        React.useEffect(() => {
+          storage
+            .listUserRepos()
+            .then((res) => {
+              setRepos(res);
+              setLoading(false);
+            })
+            .catch((err) => {
+              setError(err.message || "Failed to load repos");
+              setLoading(false);
+            });
         }, [storage]);
+
+        if (loading) {
+          return (
+            <div className="card">
+              <div className="status-line">
+                <div className="spinner"></div>
+                <span>Loading repositories...</span>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div className="card">
-            <div className="user-row">
-              <img src={user.avatarUrl} alt="" />
-              <div>
-                <div className="name">{user.name || user.login}</div>
-                <div className="login">@{user.login}</div>
-              </div>
-              <button className="link-btn" onClick={onLogout}>Sign out</button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 className="title" style={{ fontSize: "16px" }}>Select a Repository</h2>
+              <button onClick={onLogout} className="link-btn">Log out</button>
             </div>
-
-            <p className="title" style={{ fontSize: 16 }}>Choose a repository</p>
-            <p className="subtitle">Pick where your game jam project lives.</p>
-
             {error && <div className="error-box">{error}</div>}
-
-            {!repos && !error && <div className="status-line"><Spinner /> Loading repositories…</div>}
-
-            {repos && repos.length === 0 && (
-              <div className="empty-state">No repositories found for this account.</div>
-            )}
-
-            {repos && repos.length > 0 && (
-              <ul className="repo-list">
-                {repos.map((repo) => (
-                  <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
-                    <div>
-                      <div className="repo-name">{repo.full_name}</div>
-                      <div className="repo-meta">{repo.private ? "Private" : "Public"} · updated {new Date(repo.updated_at).toLocaleDateString()}</div>
-                    </div>
-                    <span className="badge">{repo.permissions && repo.permissions.admin ? "admin" : repo.permissions && repo.permissions.push ? "write" : "read"}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="repo-list">
+              {repos.map((r) => (
+                <li key={r.id} className="repo-item" onClick={() => onSelectRepo(r)}>
+                  <div>
+                    <div className="repo-name">{r.full_name}</div>
+                    <div className="repo-meta">Updated {new Date(r.updated_at).toLocaleDateString()}</div>
+                  </div>
+                  {r.private && <span className="badge">Private</span>}
+                </li>
+              ))}
+            </ul>
           </div>
         );
       }
 
-      function InitProjectForm({ repo, storage, onInitialized }) {
-        const [name, setName] = useState(repo.name);
-        const [description, setDescription] = useState("");
-        const [jam, setJam] = useState("");
-        const [theme, setTheme] = useState("");
-        const [saving, setSaving] = useState(false);
-        const [error, setError] = useState(null);
+      function ProjectGate({ repo, storage, onBack }) {
+        const [hasProject, setHasProject] = React.useState(null);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState(null);
 
-        const handleSubmit = async (e) => {
+        // Wizard form
+        const [jam, setJam] = React.useState("");
+        const [theme, setTheme] = React.useState("");
+        const [initializing, setInitializing] = React.useState(false);
+
+        React.useEffect(() => {
+          storage
+            .detectProject(repo)
+            .then((exists) => {
+              setHasProject(exists);
+              setLoading(false);
+            })
+            .catch((err) => {
+              setError(err.message || "Failed to check repo");
+              setLoading(false);
+            });
+        }, [repo, storage]);
+
+        const handleInit = async (e) => {
           e.preventDefault();
-          setSaving(true);
-          setError(null);
+          setInitializing(true);
           try {
             const manifest = {
-              id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
-              name,
-              description,
-              jam,
-              theme,
+              id: repo.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
+              name: repo.name,
+              description: "",
+              jam: jam || "Game Jam",
+              theme: theme || "TBD",
               createdAt: new Date().toISOString(),
               storage: { kind: StorageProviderKind.GitHub, githubOwner: repo.owner, githubRepo: repo.name },
             };
             await storage.initProject(repo, manifest);
-            onInitialized(manifest);
+            setHasProject(true);
           } catch (err) {
-            setError(err.message);
-            setSaving(false);
+            setError(err.message || "Failed to initialize project");
+          } finally {
+            setInitializing(false);
           }
         };
 
+        if (loading) {
+          return (
+            <div className="card">
+              <div className="status-line">
+                <div className="spinner"></div>
+                <span>Checking repository for Game Jam Planner files...</span>
+              </div>
+            </div>
+          );
+        }
+
+        if (hasProject) {
+          return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
+        }
+
         return (
           <div className="card">
-            <p className="title" style={{ fontSize: 16 }}>Set up this repository</p>
-            <p className="subtitle">No game jam project found in {repo.full_name} yet. Let's create one.</p>
-
+            <div className="breadcrumb">
+              <button onClick={onBack}>&larr; Repos</button>
+              <span>{repo.full_name}</span>
+            </div>
+            <h2 className="title">Initialize Game Jam Planner</h2>
+            <p className="subtitle">No `.gamejam/` config found in this repo. Initialize it to start planning.</p>
             {error && <div className="error-box">{error}</div>}
-
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleInit}>
               <div className="field">
-                <label>Project name</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} required />
+                <label>Jam Name</label>
+                <input type="text" placeholder="e.g. Ludum Dare 55" value={jam} onChange={(e) => setJam(e.target.value)} required />
               </div>
               <div className="field">
-                <label>Description</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's the game about?" />
+                <label>Theme</label>
+                <input type="text" placeholder="e.g. Summoning" value={theme} onChange={(e) => setTheme(e.target.value)} required />
               </div>
-              <div className="row-2">
-                <div className="field">
-                  <label>Jam</label>
-                  <input value={jam} onChange={(e) => setJam(e.target.value)} placeholder="e.g. Ludum Dare 57" />
-                </div>
-                <div className="field">
-                  <label>Theme</label>
-                  <input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="e.g. Depths" />
-                </div>
-              </div>
-              <button className="btn-primary" type="submit" disabled={saving}>
-                {saving ? "Creating…" : "Initialize project"}
+              <button type="submit" className="btn-primary" disabled={initializing}>
+                {initializing ? "Initializing .gamejam/..." : "Initialize Project"}
               </button>
             </form>
           </div>
         );
       }
 
-      function statusLabel(status) {
-        switch (status) {
-          case CardStatus.Backlog: return "Backlog";
-          case CardStatus.InProgress: return "In Progress";
-          case CardStatus.Blocked: return "Blocked";
-          case CardStatus.Done: return "Done";
-          default: return status;
-        }
-      }
+      function CardEditModal({ card, collaborators, onSave, onDelete, onClose }) {
+        const [title, setTitle] = React.useState(card ? card.title : "");
+        const [description, setDescription] = React.useState(card ? card.description || "" : "");
+        const [status, setStatus] = React.useState(card ? card.status : CardStatus.Backlog);
+        const [tag, setTag] = React.useState(card && card.tags ? card.tags[0] || "" : "");
+        const [assignee, setAssignee] = React.useState(card ? card.assignee || "" : "");
 
-      function statusAccentClass(status) {
-        switch (status) {
-          case CardStatus.Backlog: return "board-card--backlog";
-          case CardStatus.InProgress: return "board-card--in-progress";
-          case CardStatus.Blocked: return "board-card--blocked";
-          case CardStatus.Done: return "board-card--done";
-          default: return "";
-        }
-      }
+        const titleSTT = useSpeechToText();
+        const descSTT = useSpeechToText();
 
-      /**
-       * Thin wrapper over the browser's native SpeechRecognition API. No
-       * dependency, no CDN — Chrome/Edge support it well; Firefox/Safari
-       * support is patchy-to-absent, so `supported` gates the UI accordingly.
-       * onFinalText is called incrementally with each finalized chunk (not
-       * the whole transcript each time), so the caller appends rather than
-       * replaces.
-       */
-      function useSpeechToText(onFinalText) {
-        const RecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const supported = !!RecognitionAPI;
+        React.useEffect(() => {
+          if (titleSTT.transcript) setTitle((prev) => (prev ? `${prev} ${titleSTT.transcript}` : titleSTT.transcript));
+        }, [titleSTT.transcript]);
 
-        const recognitionRef = useRef(null);
-        const [listening, setListening] = useState(false);
-        const [interimText, setInterimText] = useState("");
-        const [error, setError] = useState(null);
+        React.useEffect(() => {
+          if (descSTT.transcript) setDescription((prev) => (prev ? `${prev} ${descSTT.transcript}` : descSTT.transcript));
+        }, [descSTT.transcript]);
 
-        const start = () => {
-          if (!supported || listening) return;
-          const recognition = new RecognitionAPI();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognition.lang = navigator.language || "en-US";
-
-          recognition.onresult = (event) => {
-            let finalChunk = "";
-            let interimChunk = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-              const transcript = event.results[i][0].transcript;
-              if (event.results[i].isFinal) finalChunk += transcript;
-              else interimChunk += transcript;
-            }
-            if (finalChunk) onFinalText(finalChunk);
-            setInterimText(interimChunk);
-          };
-          recognition.onerror = (event) => {
-            setError(event.error === "not-allowed" ? "Microphone access denied." : `Speech recognition error: ${event.error}`);
-            setListening(false);
-          };
-          recognition.onend = () => { setListening(false); setInterimText(""); };
-
-          recognitionRef.current = recognition;
-          setError(null);
-          recognition.start();
-          setListening(true);
-        };
-
-        const stop = () => { recognitionRef.current && recognitionRef.current.stop(); };
-
-        // Stop any in-flight recognition if the component unmounts mid-dictation.
-        useEffect(() => () => { recognitionRef.current && recognitionRef.current.stop(); }, []);
-
-        return { supported, listening, interimText, error, start, stop };
-      }
-
-      function CardDetailModal({ card, collaborators, onSave, onDelete, onClose }) {
-        const [title, setTitle] = useState(card.title);
-        const [description, setDescription] = useState(card.description || "");
-        const [status, setStatus] = useState(card.status);
-        const [tagsText, setTagsText] = useState((card.tags || []).join(", "));
-        const [assignee, setAssignee] = useState(card.assignee || "");
-
-        const appendToDescription = useCallback((text) => {
-          setDescription((prev) => (prev && !prev.endsWith(" ") ? prev + " " : prev) + text.trim());
-        }, []);
-        const speech = useSpeechToText(appendToDescription);
-
-        const handleSave = () => {
-          const tags = tagsText.split(",").map((t) => t.trim()).filter(Boolean);
-          onSave({
-            ...card,
-            title: title.trim() || card.title,
-            description,
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          if (!title.trim()) return;
+          const updatedCard = {
+            id: card ? card.id : `card-${Date.now()}`,
+            title: title.trim(),
+            description: description.trim(),
             status,
-            tags,
+            tags: tag.trim() ? [tag.trim()] : [],
             assignee: assignee || null,
+            createdAt: card ? card.createdAt : new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-          });
+          };
+          onSave(updatedCard);
         };
-
-        const handleOverlayClick = (e) => { if (e.target === e.currentTarget) onClose(); };
-
-        // If the current assignee isn't in the fetched collaborator list
-        // (removed from the repo since assignment, or the list failed to
-        // load), still show them as an option so they don't silently vanish.
-        const assigneeOptions = card.assignee && !collaborators.includes(card.assignee)
-          ? [card.assignee, ...collaborators]
-          : collaborators;
 
         return (
-          <div className="modal-overlay" onClick={handleOverlayClick}>
-            <div className="modal-panel">
+          <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  style={{ font: "inherit", fontSize: 18, fontWeight: 600, background: "none", border: "none", color: "var(--text)", padding: 0, flex: 1 }}
-                />
-                <button className="modal-close" onClick={onClose} title="Close">×</button>
+                <h2 className="title" style={{ fontSize: "16px", margin: 0 }}>
+                  {card ? "Edit Card" : "New Card"}
+                </h2>
+                <button className="modal-close" onClick={onClose}>&times;</button>
               </div>
 
-              <div className="field">
-                <div className="field-header">
-                  <label>Description</label>
-                  <button
-                    type="button"
-                    className={`mic-button${speech.listening ? " listening" : ""}`}
-                    disabled={!speech.supported}
-                    title={speech.supported ? (speech.listening ? "Stop dictation" : "Dictate description") : "Speech-to-text isn't supported in this browser (try Chrome or Edge)"}
-                    onClick={() => (speech.listening ? speech.stop() : speech.start())}
-                  >
-                    🎤
-                  </button>
-                </div>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Details, acceptance criteria, notes…" style={{ minHeight: 100 }} />
-                {speech.listening && (
-                  <div className="interim-text">{speech.interimText || "Listening…"}</div>
-                )}
-                {speech.error && <div className="speech-error">{speech.error}</div>}
-              </div>
-
-              <div className="row-2">
+              <form onSubmit={handleSubmit}>
                 <div className="field">
-                  <label>Status</label>
-                  <select className="status-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                    {Object.values(CardStatus).map((s) => (
-                      <option key={s} value={s}>{statusLabel(s)}</option>
-                    ))}
-                  </select>
+                  <div className="field-header">
+                    <label>Title</label>
+                    {titleSTT.isSupported && (
+                      <button
+                        type="button"
+                        className={`mic-button ${titleSTT.isListening ? "listening" : ""}`}
+                        onClick={titleSTT.isListening ? titleSTT.stopListening : titleSTT.startListening}
+                        title={titleSTT.isListening ? "Stop listening" : "Dictate title"}
+                      >
+                        🎤
+                      </button>
+                    )}
+                  </div>
+                  <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Card title" required />
+                  {titleSTT.interimTranscript && <div className="interim-text">{titleSTT.interimTranscript}</div>}
+                  {titleSTT.error && <div className="speech-error">{titleSTT.error}</div>}
                 </div>
+
+                <div className="field">
+                  <div className="field-header">
+                    <label>Description</label>
+                    {descSTT.isSupported && (
+                      <button
+                        type="button"
+                        className={`mic-button ${descSTT.isListening ? "listening" : ""}`}
+                        onClick={descSTT.isListening ? descSTT.stopListening : descSTT.startListening}
+                        title={descSTT.isListening ? "Stop listening" : "Dictate description"}
+                      >
+                        🎤
+                      </button>
+                    )}
+                  </div>
+                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Card details..." />
+                  {descSTT.interimTranscript && <div className="interim-text">{descSTT.interimTranscript}</div>}
+                  {descSTT.error && <div className="speech-error">{descSTT.error}</div>}
+                </div>
+
+                <div className="row-2">
+                  <div className="field">
+                    <label>Status</label>
+                    <select className="status-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                      <option value={CardStatus.Backlog}>Backlog</option>
+                      <option value={CardStatus.InProgress}>In Progress</option>
+                      <option value={CardStatus.Blocked}>Blocked</option>
+                      <option value={CardStatus.Done}>Done</option>
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label>Tag</label>
+                    <input type="text" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. Audio, Code" />
+                  </div>
+                </div>
+
                 <div className="field">
                   <label>Assignee</label>
                   <select className="status-select" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
                     <option value="">Unassigned</option>
-                    {assigneeOptions.map((login) => (
-                      <option key={login} value={login}>{login}</option>
+                    {collaborators.map((c) => (
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              <div className="field">
-                <label>Tags (comma-separated)</label>
-                <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="e.g. art, audio, urgent" />
-              </div>
-
-              <div className="modal-footer">
-                <button className="btn-danger-text" onClick={onDelete}>Delete card</button>
-                <button className="btn-primary" onClick={handleSave}>Save changes</button>
-              </div>
+                <div className="modal-footer">
+                  {card && onDelete ? (
+                    <button type="button" className="btn-danger-text" onClick={() => onDelete(card.id)}>
+                      Delete Card
+                    </button>
+                  ) : <div />}
+                  <button type="submit" className="btn-primary">Save Card</button>
+                </div>
+              </form>
             </div>
           </div>
         );
       }
 
-      function BoardView({ workspace, project, collaborators }) {
-        const [newCardTitles, setNewCardTitles] = useState({});
-        const [draggingCardId, setDraggingCardId] = useState(null);
-        const [dragOverStatus, setDragOverStatus] = useState(null);
-        const [selectedCardId, setSelectedCardId] = useState(null);
+      function BoardView({ ws, storage, repo }) {
+        const [editingCard, setEditingCard] = React.useState(null);
+        const [isNewCardOpen, setIsNewCardOpen] = React.useState(false);
+        const [collaborators, setCollaborators] = React.useState([]);
+        const [draggedCardId, setDraggedCardId] = React.useState(null);
+        const [dragOverCol, setDragOverCol] = React.useState(null);
 
-        const { board, cards } = project;
-        const statuses = Object.values(CardStatus);
-        const nextStatus = (status) => statuses[(statuses.indexOf(status) + 1) % statuses.length];
-        const prevStatus = (status) => statuses[(statuses.indexOf(status) - 1 + statuses.length) % statuses.length];
+        const project = ws.getProject();
+        const cards = ws.getCards();
 
-        const handleAddCard = (status) => {
-          const title = (newCardTitles[status] || "").trim();
-          if (!title) return;
-          workspace.addCard({ title, status });
-          setNewCardTitles((prev) => ({ ...prev, [status]: "" }));
+        React.useEffect(() => {
+          storage.listCollaborators(repo).then(setCollaborators).catch(() => {});
+        }, [storage, repo]);
+
+        const columns = [
+          { id: CardStatus.Backlog, title: "Backlog" },
+          { id: CardStatus.InProgress, title: "In Progress" },
+          { id: CardStatus.Blocked, title: "Blocked" },
+          { id: CardStatus.Done, title: "Done" },
+        ];
+
+        const getCardsByStatus = (status) => cards.filter((c) => c.status === status);
+
+        const handleSaveCard = (card) => {
+          ws.setCard(card);
+          setEditingCard(null);
+          setIsNewCardOpen(false);
+        };
+
+        const handleDeleteCard = (cardId) => {
+          ws.deleteCard(cardId);
+          setEditingCard(null);
         };
 
         const handleDragStart = (e, cardId) => {
-          setDraggingCardId(cardId);
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", cardId); // Firefox requires data to be set for drag to start
-        };
-        const handleDragEnd = () => { setDraggingCardId(null); setDragOverStatus(null); };
-        const handleColumnDragOver = (e, status) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverStatus(status); };
-        const handleColumnDragLeave = (status) => { setDragOverStatus((current) => (current === status ? null : current)); };
-        const handleColumnDrop = (e, status) => {
-          e.preventDefault();
-          const cardId = e.dataTransfer.getData("text/plain") || draggingCardId;
-          if (cardId) workspace.moveCard(cardId, status);
-          setDraggingCardId(null);
-          setDragOverStatus(null);
+          e.dataTransfer.setData("text/plain", cardId);
+          setDraggedCardId(cardId);
         };
 
-        const selectedCard = selectedCardId ? cards[selectedCardId] : null;
+        const handleDragOver = (e, colId) => {
+          e.preventDefault();
+          setDragOverCol(colId);
+        };
+
+        const handleDragLeave = (e, colId) => {
+          if (dragOverCol === colId) setDragOverCol(null);
+        };
+
+        const handleDrop = (e, colId) => {
+          e.preventDefault();
+          const cardId = e.dataTransfer.getData("text/plain") || draggedCardId;
+          if (cardId) {
+            ws.moveCard(cardId, colId);
+          }
+          setDraggedCardId(null);
+          setDragOverCol(null);
+        };
 
         return (
           <div>
-            <div className="board-columns">
-              {board.columns.map((col) => (
-                <div
-                  key={col.id}
-                  className={`board-column${dragOverStatus === col.status ? " drag-over" : ""}`}
-                  onDragOver={(e) => handleColumnDragOver(e, col.status)}
-                  onDragLeave={() => handleColumnDragLeave(col.status)}
-                  onDrop={(e) => handleColumnDrop(e, col.status)}
-                >
-                  <div className="board-column-header">
-                    {statusLabel(col.status)}
-                    <span className="board-column-count">{col.cardIds.length}</span>
-                  </div>
-
-                  <div className="board-column-cards">
-                    {col.cardIds.map((cardId) => {
-                      const card = cards[cardId];
-                      if (!card) return null;
-                      return (
-                        <div
-                          key={cardId}
-                          className={`board-card ${statusAccentClass(card.status)}${draggingCardId === cardId ? " dragging" : ""}`}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, cardId)}
-                          onDragEnd={handleDragEnd}
-                          onClick={() => setSelectedCardId(cardId)}
-                        >
-                          {(card.tags && card.tags.length > 0) || card.assignee ? (
-                            <div className="card-meta-row">
-                              {(card.tags || []).map((tag) => <span key={tag} className="tag-pill">{tag}</span>)}
-                              {card.assignee && <span className="avatar-badge" title={card.assignee}>{card.assignee.slice(0, 2).toUpperCase()}</span>}
-                            </div>
-                          ) : null}
-                          <div className="board-card-title">{card.title}</div>
-                          <div className="board-card-actions">
-                            <button title="Move left" onClick={(e) => { e.stopPropagation(); workspace.moveCard(cardId, prevStatus(card.status)); }}>◀</button>
-                            <button title="Move right" onClick={(e) => { e.stopPropagation(); workspace.moveCard(cardId, nextStatus(card.status)); }}>▶</button>
-                            <button title="Delete" className="board-card-delete" onClick={(e) => { e.stopPropagation(); workspace.deleteCard(cardId); }}>×</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="add-card-row">
-                    <input
-                      placeholder="New card…"
-                      value={newCardTitles[col.status] || ""}
-                      onChange={(e) => setNewCardTitles((prev) => ({ ...prev, [col.status]: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAddCard(col.status); }}
-                    />
-                    <button onClick={() => handleAddCard(col.status)}>+</button>
-                  </div>
+            <div className="board-topbar">
+              <div>
+                <h2 className="title" style={{ fontSize: "20px" }}>{project ? project.name : "Board"}</h2>
+                <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                  {project ? `${project.jam} • Theme: ${project.theme}` : ""}
                 </div>
-              ))}
+              </div>
+              <div className="board-topbar-actions">
+                <button className="btn-primary" onClick={() => setIsNewCardOpen(true)}>+ Add Card</button>
+              </div>
             </div>
 
-            {selectedCard && (
-              <CardDetailModal
-                card={selectedCard}
+            <div className="board-columns">
+              {columns.map((col) => {
+                const colCards = getCardsByStatus(col.id);
+                const isOver = dragOverCol === col.id;
+                return (
+                  <div
+                    key={col.id}
+                    className={`board-column ${isOver ? "drag-over" : ""}`}
+                    onDragOver={(e) => handleDragOver(e, col.id)}
+                    onDragLeave={(e) => handleDragLeave(e, col.id)}
+                    onDrop={(e) => handleDrop(e, col.id)}
+                  >
+                    <div className="board-column-header">
+                      <span>{col.title}</span>
+                      <span className="board-column-count">{colCards.length}</span>
+                    </div>
+
+                    <div className="board-column-cards">
+                      {colCards.map((card) => (
+                        <div
+                          key={card.id}
+                          className={`board-card board-card--${card.status} ${draggedCardId === card.id ? "dragging" : ""}`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, card.id)}
+                          onClick={() => setEditingCard(card)}
+                        >
+                          <div className="card-meta-row">
+                            {card.tags && card.tags.length > 0 && <span className="tag-pill">{card.tags[0]}</span>}
+                            {card.assignee && (
+                              <div className="avatar-badge" title={`Assigned to ${card.assignee}`}>
+                                {card.assignee.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="board-card-title">{card.title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {(editingCard || isNewCardOpen) && (
+              <CardEditModal
+                card={editingCard}
                 collaborators={collaborators}
-                onClose={() => setSelectedCardId(null)}
-                onSave={(updated) => { workspace.upsertCard(updated); setSelectedCardId(null); }}
-                onDelete={() => { workspace.deleteCard(selectedCardId); setSelectedCardId(null); }}
+                onSave={handleSaveCard}
+                onDelete={editingCard ? handleDeleteCard : null}
+                onClose={() => {
+                  setEditingCard(null);
+                  setIsNewCardOpen(false);
+                }}
               />
             )}
           </div>
         );
       }
 
-      function Dashboard({ project, repo, storage }) {
-        const [activity, setActivity] = useState(null);
-        const [activityError, setActivityError] = useState(null);
-        const [collaborators, setCollaborators] = useState(null);
+      function DashboardView({ ws, storage, repo }) {
+        const [activity, setActivity] = React.useState([]);
+        const [team, setTeam] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
 
-        useEffect(() => {
-          let cancelled = false;
-          storage.listRecentActivity(repo)
-            .then((items) => { if (!cancelled) setActivity(items); })
-            .catch((err) => { if (!cancelled) setActivityError(err.message); });
-          storage.listCollaboratorsWithPermissions(repo)
-            .then((list) => { if (!cancelled) setCollaborators(list); })
-            .catch(() => { if (!cancelled) setCollaborators([]); });
-          return () => { cancelled = true; };
-        }, [repo, storage]);
+        const project = ws.getProject();
+        const cards = ws.getCards();
 
-        const { manifest, board, cards } = project;
-        const cardList = Object.values(cards);
-        const totalCards = cardList.length;
-        const doneCount = cardList.filter((c) => c.status === CardStatus.Done).length;
-        const percentDone = totalCards > 0 ? Math.round((doneCount / totalCards) * 100) : 0;
+        const total = cards.length;
+        const done = cards.filter((c) => c.status === CardStatus.Done).length;
+        const inProgress = cards.filter((c) => c.status === CardStatus.InProgress).length;
+        const blocked = cards.filter((c) => c.status === CardStatus.Blocked).length;
 
-        const countByStatus = (status) => cardList.filter((c) => c.status === status).length;
+        React.useEffect(() => {
+          let active = true;
+          Promise.all([
+            storage.listRecentActivity(repo),
+            storage.listCollaboratorsWithPermissions(repo),
+          ])
+            .then(([act, tm]) => {
+              if (active) {
+                setActivity(act);
+                setTeam(tm);
+                setLoading(false);
+              }
+            })
+            .catch(() => {
+              if (active) setLoading(false);
+            });
+          return () => { active = false; };
+        }, [storage, repo]);
 
         return (
           <div>
-            {manifest.description && (
-              <p style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20, maxWidth: 640 }}>{manifest.description}</p>
-            )}
+            <div style={{ marginBottom: "20px" }}>
+              <h2 className="title" style={{ fontSize: "20px" }}>{project ? project.name : "Dashboard"}</h2>
+              <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                {project ? `${project.jam} • Theme: ${project.theme}` : ""}
+              </div>
+            </div>
 
             <div className="dashboard-grid">
               <div className="dashboard-stat">
-                <div className="stat-value">{totalCards}</div>
-                <div className="stat-label">Total cards</div>
+                <div className="stat-value">{total}</div>
+                <div className="stat-label">Total Cards</div>
               </div>
               <div className="dashboard-stat">
-                <div className="stat-value">{percentDone}%</div>
-                <div className="stat-label">Done</div>
+                <div className="stat-value" style={{ color: "#60a5fa" }}>{inProgress}</div>
+                <div className="stat-label">In Progress</div>
               </div>
-              {Object.values(CardStatus).map((status) => (
-                <div className="dashboard-stat" key={status}>
-                  <div className="stat-value">{countByStatus(status)}</div>
-                  <div className="stat-label">{statusLabel(status)}</div>
-                </div>
-              ))}
+              <div className="dashboard-stat">
+                <div className="stat-value" style={{ color: "var(--danger)" }}>{blocked}</div>
+                <div className="stat-label">Blocked</div>
+              </div>
+              <div className="dashboard-stat">
+                <div className="stat-value" style={{ color: "var(--accent)" }}>{done}</div>
+                <div className="stat-label">Completed</div>
+              </div>
             </div>
 
             <div className="dashboard-columns">
               <div className="dashboard-panel">
-                <h3>Team</h3>
-                {collaborators === null && <div className="status-line"><Spinner /> Loading…</div>}
-                {collaborators && collaborators.length === 0 && <div className="empty-state">No collaborators found.</div>}
-                {collaborators && collaborators.map((c) => (
-                  <div className="team-row" key={c.login}>
-                    <img src={c.avatarUrl} alt="" />
-                    <span className="team-login">{c.login}</span>
-                    <span className="badge">{c.permission}</span>
-                  </div>
-                ))}
+                <h3>Recent Activity</h3>
+                {loading ? (
+                  <div className="status-line"><div className="spinner"></div><span>Loading activity...</span></div>
+                ) : activity.length === 0 ? (
+                  <div className="empty-state">No recent activity</div>
+                ) : (
+                  activity.map((a) => (
+                    <div key={a.sha} className="activity-item">
+                      {a.authorAvatarUrl && <img src={a.authorAvatarUrl} alt={a.authorLogin} />}
+                      <div>
+                        <div className="activity-message">{a.message}</div>
+                        <div className="activity-meta">
+                          {a.authorLogin} • {a.date ? new Date(a.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="dashboard-panel">
-                <h3>Recent activity</h3>
-                {activityError && <div className="error-box">{activityError}</div>}
-                {!activity && !activityError && <div className="status-line"><Spinner /> Loading…</div>}
-                {activity && activity.length === 0 && <div className="empty-state">No commits to .gamejam/ yet.</div>}
-                {activity && activity.map((item) => (
-                  <div className="activity-item" key={item.sha}>
-                    {item.authorAvatarUrl && <img src={item.authorAvatarUrl} alt="" />}
-                    <div>
-                      <div className="activity-message">{item.message}</div>
-                      <div className="activity-meta">
-                        {item.authorLogin}{item.date ? ` · ${new Date(item.date).toLocaleString()}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      function TeamPage({ repo, storage }) {
-        const [collaborators, setCollaborators] = useState(null);
-        const [teamHandle, setTeamHandle] = useState(null);
-        const [syncing, setSyncing] = useState(false);
-        const [error, setError] = useState(null);
-        const [lastSyncedAt, setLastSyncedAt] = useState(null);
-
-        const load = useCallback(() => {
-          setError(null);
-          Promise.all([
-            storage.listCollaboratorsWithPermissions(repo),
-            storage.readTeam(repo),
-          ]).then(([collabs, team]) => {
-            setCollaborators(collabs);
-            setTeamHandle(team.handle);
-            setLastSyncedAt(team.data.length > 0 ? true : null);
-          }).catch((err) => setError(err.message));
-        }, [repo, storage]);
-
-        useEffect(() => { load(); }, [load]);
-
-        const handleSync = async () => {
-          if (!collaborators) return;
-          setSyncing(true);
-          setError(null);
-          try {
-            const teamData = collaborators.map((c) => ({ login: c.login, role: c.permission }));
-            const handle = await storage.writeTeam(repo, teamData, teamHandle);
-            setTeamHandle(handle);
-            setLastSyncedAt(true);
-          } catch (err) {
-            setError(err.message);
-          } finally {
-            setSyncing(false);
-          }
-        };
-
-        return (
-          <div className="dashboard-panel" style={{ maxWidth: 480 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <h3 style={{ margin: 0 }}>Team roster</h3>
-              <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} disabled={syncing || !collaborators} onClick={handleSync}>
-                {syncing ? "Syncing…" : "Sync to team.json"}
-              </button>
-            </div>
-
-            <p className="subtitle" style={{ marginBottom: 14 }}>
-              Mirrors each collaborator's current GitHub permission level. GitHub is the source of truth — this is a
-              persisted snapshot in team.json, refreshed whenever you hit Sync.
-            </p>
-
-            {error && <div className="error-box">{error}</div>}
-            {!collaborators && !error && <div className="status-line"><Spinner /> Loading…</div>}
-            {collaborators && collaborators.length === 0 && <div className="empty-state">No collaborators on this repository.</div>}
-            {collaborators && collaborators.map((c) => (
-              <div className="team-row" key={c.login}>
-                <img src={c.avatarUrl} alt="" />
-                <span className="team-login">{c.login}</span>
-                <span className="badge">{c.permission}</span>
-              </div>
-            ))}
-          </div>
-        );
-      }
-
-      function ProjectShell({ repo, storage, onBack }) {
-        const { loading, error, workspace, project, dirty, saving, conflicts } = useWorkspace(storage, repo);
-        const [view, setView] = useState("dashboard"); // dashboard | board | team
-        const [collaboratorLogins, setCollaboratorLogins] = useState([]);
-
-        // Fetched once per repo for the board's assignee dropdown. Failure
-        // here shouldn't block the board — just leaves the dropdown showing
-        // "Unassigned" only, so errors are swallowed rather than surfaced.
-        useEffect(() => {
-          let cancelled = false;
-          storage.listCollaborators(repo)
-            .then((logins) => { if (!cancelled) setCollaboratorLogins(logins); })
-            .catch(() => { if (!cancelled) setCollaboratorLogins([]); });
-          return () => { cancelled = true; };
-        }, [repo, storage]);
-
-        // The board/dashboard need more horizontal room than the 560px
-        // centered card layout used for login/repo screens. Widen #root only
-        // while this component is mounted, restore it on unmount.
-        useEffect(() => {
-          const root = document.getElementById("root");
-          const previous = root.style.maxWidth;
-          root.style.maxWidth = "1100px";
-          return () => { root.style.maxWidth = previous; };
-        }, []);
-
-        if (loading) {
-          return (
-            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-              <div className="status-line"><Spinner /> Loading project…</div>
-            </div>
-          );
-        }
-
-        if (error) {
-          return (
-            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-              <div className="error-box">{error}</div>
-              <button onClick={onBack}>Back to repositories</button>
-            </div>
-          );
-        }
-
-        const { manifest } = project;
-
-        return (
-          <div>
-            <div className="breadcrumb">
-              <button onClick={onBack}>← Repositories</button>
-              <span>{repo.full_name}</span>
-            </div>
-
-            <div className="board-topbar">
-              <div>
-                <p className="title" style={{ fontSize: 18, marginBottom: 2 }}>{manifest.name}</p>
-                <p className="subtitle" style={{ marginBottom: 0 }}>
-                  {manifest.jam || "No jam set"}{manifest.theme ? ` · ${manifest.theme}` : ""}
-                </p>
-              </div>
-              <div className="board-topbar-actions">
-                {conflicts.length > 0 && (
-                  <div className="error-box" style={{ marginBottom: 0 }}>
-                    {conflicts.length} file{conflicts.length > 1 ? "s" : ""} changed on GitHub since this loaded.{" "}
-                    <button onClick={() => workspace.reloadDiscardingLocalChanges()}>Reload</button>
-                  </div>
-                )}
-                {saving && <span className="status-line"><Spinner /> Saving…</span>}
-                {!saving && dirty && <span className="status-line">Unsaved changes</span>}
-                {!saving && !dirty && <span className="status-line">All changes saved</span>}
-                <button className="btn-primary" disabled={!dirty || saving} onClick={() => workspace.save("Planning updates")}>
-                  Save
-                </button>
-              </div>
-            </div>
-
-            <div className="view-tabs">
-              <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}>Dashboard</button>
-              <button className={view === "board" ? "active" : ""} onClick={() => setView("board")}>Board</button>
-              <button className={view === "team" ? "active" : ""} onClick={() => setView("team")}>Team</button>
-            </div>
-
-            {view === "dashboard" && <Dashboard project={project} repo={repo} storage={storage} />}
-            {view === "board" && <BoardView workspace={workspace} project={project} collaborators={collaboratorLogins} />}
-            {view === "team" && <TeamPage repo={repo} storage={storage} />}
-          </div>
-        );
-      }
-
-
-      function ProjectGate({ repo, storage, onBack }) {
-        const [phase, setPhase] = useState("checking"); // checking | not-found | loaded | error
-        const [error, setError] = useState(null);
-
-        useEffect(() => {
-          let cancelled = false;
-          setPhase("checking");
-          setError(null);
-          storage.detectProject(repo)
-            .then((exists) => { if (!cancelled) setPhase(exists ? "loaded" : "not-found"); })
-            .catch((err) => { if (!cancelled) { setError(err.message); setPhase("error"); } });
-          return () => { cancelled = true; };
-        }, [repo, storage]);
-
-        if (phase === "checking") {
-          return (
-            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-              <div className="status-line"><Spinner /> Checking {repo.full_name} for a game jam project…</div>
-            </div>
-          );
-        }
-
-        if (phase === "error") {
-          return (
-            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-              <div className="error-box">{error}</div>
-              <button onClick={onBack}>Back to repositories</button>
-            </div>
-          );
-        }
-
-        if (phase === "not-found") {
-          return <InitProjectForm repo={repo} storage={storage} onInitialized={() => setPhase("loaded")} />;
-        }
-
-        return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
-      }
-
-      function App() {
-        const authRef = useRef(null);
-        if (!authRef.current) authRef.current = new GitHubDeviceFlowAuth();
-        const auth = authRef.current;
-
-        const [user, setUser] = useState(null);
-        const [restoring, setRestoring] = useState(true);
-        const [selectedRepo, setSelectedRepo] = useState(null);
-
-        useEffect(() => {
-          auth.restoreSession().then((u) => { setUser(u); setRestoring(false); });
-        }, []);
-
-        const handleLogout = useCallback(() => { auth.logout(); setUser(null); setSelectedRepo(null); }, [auth]);
-
-        if (restoring) {
-          return <div className="card"><div className="status-line"><Spinner /> Checking for an existing session…</div></div>;
-        }
-
-        if (!user) {
-          return <LoginScreen auth={auth} onSignedIn={setUser} />;
-        }
-
-        const storage = new GitHubStorage(user.accessToken);
-
-        if (!selectedRepo) {
-          return (
-            <RepoList
-              user={user}
-              storage={storage}
-              onLogout={handleLogout}
-              onSelectRepo={(repo) => setSelectedRepo({
-                // Normalize the raw GitHub API repo shape (repo.owner is an
-                // object) into the plain { owner, name } string pair that
-                // GitHubStorage's RepositoryRef expects.
-                owner: repo.owner.login,
-                name: repo.name,
-                full_name: repo.full_name,
-              })}
-            />
-          );
-        }
-
-        return <ProjectGate repo={selectedRepo} storage={storage} onBack={() => setSelectedRepo(null)} />;
-      }
-
-      const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<App />);
-    </script>
-
-    <script>
-      // Babel's automatic script-tag scanner defaults to the "automatic" JSX
-      // runtime, which emits `import { jsx } from "react/jsx-runtime"` even
-      // without data-type="module" — that import statement is what breaks on
-      // file://. Transforming manually lets us force the classic runtime
-      // (React.createElement calls, no imports) so this stays a plain script.
-      const source = document.getElementById("app-source").textContent;
-      const { code } = Babel.transform(source, {
-        presets: [["react", { runtime: "classic" }]],
-      });
-      const script = document.createElement("script");
-      script.textContent = code;
-      document.body.appendChild(script);
-    </script>
-  </body>
-</html>
+                <h3>Team Members</h3>
+                {loading ? (
+                  <div className="status-line"><div className="spinner"></div><span>Loading team...</span></div>
+                ) : team.length === 0 ? (
+                  <div className="empty-state">No team members found</div>
+                ) : (
+                  team.map((m) => (
+                    <div key={m.
