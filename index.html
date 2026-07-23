@@ -333,6 +333,7 @@
       .board-card-title {
         font-size: 13px;
         margin-bottom: 8px;
+        overflow-wrap: anywhere;
       }
       .board-card-actions {
         display: flex;
@@ -409,6 +410,10 @@
         background: #1f232c;
         color: var(--text-dim);
         border: 1px solid var(--panel-border);
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .avatar-badge {
         width: 18px;
@@ -492,6 +497,56 @@
         border-radius: 8px;
         color: var(--text);
         padding: 10px 12px;
+      }
+
+      .field-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .field-header label {
+        margin-bottom: 0;
+      }
+      .mic-button {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .mic-button.listening {
+        border-color: var(--danger);
+        color: var(--danger);
+        animation: mic-pulse 1.2s infinite;
+      }
+      .mic-button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      @keyframes mic-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(248, 113, 113, 0);
+        }
+      }
+      .interim-text {
+        font-size: 12px;
+        color: var(--text-dim);
+        font-style: italic;
+        margin-top: 6px;
+      }
+      .speech-error {
+        font-size: 12px;
+        color: var(--danger);
+        margin-top: 6px;
       }
     </style>
   </head>
@@ -1283,12 +1338,72 @@
         }
       }
 
+      /**
+       * Thin wrapper over the browser's native SpeechRecognition API. No
+       * dependency, no CDN — Chrome/Edge support it well; Firefox/Safari
+       * support is patchy-to-absent, so `supported` gates the UI accordingly.
+       * onFinalText is called incrementally with each finalized chunk (not
+       * the whole transcript each time), so the caller appends rather than
+       * replaces.
+       */
+      function useSpeechToText(onFinalText) {
+        const RecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const supported = !!RecognitionAPI;
+
+        const recognitionRef = useRef(null);
+        const [listening, setListening] = useState(false);
+        const [interimText, setInterimText] = useState("");
+        const [error, setError] = useState(null);
+
+        const start = () => {
+          if (!supported || listening) return;
+          const recognition = new RecognitionAPI();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = navigator.language || "en-US";
+
+          recognition.onresult = (event) => {
+            let finalChunk = "";
+            let interimChunk = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+              if (event.results[i].isFinal) finalChunk += transcript;
+              else interimChunk += transcript;
+            }
+            if (finalChunk) onFinalText(finalChunk);
+            setInterimText(interimChunk);
+          };
+          recognition.onerror = (event) => {
+            setError(event.error === "not-allowed" ? "Microphone access denied." : `Speech recognition error: ${event.error}`);
+            setListening(false);
+          };
+          recognition.onend = () => { setListening(false); setInterimText(""); };
+
+          recognitionRef.current = recognition;
+          setError(null);
+          recognition.start();
+          setListening(true);
+        };
+
+        const stop = () => { recognitionRef.current && recognitionRef.current.stop(); };
+
+        // Stop any in-flight recognition if the component unmounts mid-dictation.
+        useEffect(() => () => { recognitionRef.current && recognitionRef.current.stop(); }, []);
+
+        return { supported, listening, interimText, error, start, stop };
+      }
+
       function CardDetailModal({ card, collaborators, onSave, onDelete, onClose }) {
         const [title, setTitle] = useState(card.title);
         const [description, setDescription] = useState(card.description || "");
         const [status, setStatus] = useState(card.status);
         const [tagsText, setTagsText] = useState((card.tags || []).join(", "));
         const [assignee, setAssignee] = useState(card.assignee || "");
+
+        const appendToDescription = useCallback((text) => {
+          setDescription((prev) => (prev && !prev.endsWith(" ") ? prev + " " : prev) + text.trim());
+        }, []);
+        const speech = useSpeechToText(appendToDescription);
 
         const handleSave = () => {
           const tags = tagsText.split(",").map((t) => t.trim()).filter(Boolean);
@@ -1325,8 +1440,23 @@
               </div>
 
               <div className="field">
-                <label>Description</label>
+                <div className="field-header">
+                  <label>Description</label>
+                  <button
+                    type="button"
+                    className={`mic-button${speech.listening ? " listening" : ""}`}
+                    disabled={!speech.supported}
+                    title={speech.supported ? (speech.listening ? "Stop dictation" : "Dictate description") : "Speech-to-text isn't supported in this browser (try Chrome or Edge)"}
+                    onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                  >
+                    🎤
+                  </button>
+                </div>
                 <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Details, acceptance criteria, notes…" style={{ minHeight: 100 }} />
+                {speech.listening && (
+                  <div className="interim-text">{speech.interimText || "Listening…"}</div>
+                )}
+                {speech.error && <div className="speech-error">{speech.error}</div>}
               </div>
 
               <div className="row-2">
