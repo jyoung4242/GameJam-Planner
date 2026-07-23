@@ -265,6 +265,104 @@
         color: var(--text-dim);
         margin-top: 2px;
       }
+
+      .board-topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .board-topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .board-topbar-actions button.btn-primary {
+        width: auto;
+        padding: 8px 20px;
+      }
+      .board-columns {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+      .board-column {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 14px;
+        width: 260px;
+        flex: 0 0 260px;
+        display: flex;
+        flex-direction: column;
+      }
+      .board-column-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 10px;
+      }
+      .board-column-count {
+        background: #0f1115;
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+      }
+      .board-column-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 24px;
+        margin-bottom: 10px;
+      }
+      .board-card {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .board-card-title {
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      .board-card-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .board-card-actions button {
+        padding: 3px 8px;
+        font-size: 11px;
+        border-radius: 6px;
+      }
+      .board-card-delete {
+        margin-left: auto;
+        color: var(--danger);
+      }
+      .add-card-row {
+        display: flex;
+        gap: 6px;
+      }
+      .add-card-row input {
+        flex: 1;
+        font-size: 13px;
+        padding: 7px 10px;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+      }
+      .add-card-row button {
+        padding: 7px 12px;
+      }
     </style>
   </head>
   <body>
@@ -569,6 +667,224 @@
       }
 
       // =====================================================================
+      // WORKSPACE — dirty-state tracking, batched save, autosave.
+      // Per planning.md's "Saving Strategy": don't commit every interaction,
+      // batch changes, autosave every few minutes, meaningful commit messages.
+      // This is the plain-JS port of the Workspace design from earlier in the
+      // project (originally sketched as TS modules before the pivot to a
+      // single file) — same ideas, rewritten to live in #app-source.
+      // =====================================================================
+      class Workspace {
+        constructor(storage, repo, autosaveIntervalMs = 3 * 60 * 1000) {
+          this.storage = storage;
+          this.repo = repo;
+          this.autosaveIntervalMs = autosaveIntervalMs;
+          this.listeners = new Set();
+
+          this.manifest = null; // { data, handle }
+          this.board = null;    // { data, handle, dirty }
+          this.cards = new Map(); // id -> { data, handle, dirty, deleted }
+
+          this.saving = false;
+          this.conflicts = [];
+          this.autosaveTimer = null;
+        }
+
+        onChange(listener) {
+          this.listeners.add(listener);
+          return () => this.listeners.delete(listener);
+        }
+
+        emit() {
+          this.listeners.forEach((listener) => listener());
+        }
+
+        async load() {
+          const [manifestResult, boardResult, cardIds] = await Promise.all([
+            this.storage.readManifest(this.repo),
+            this.storage.readBoard(this.repo),
+            this.storage.listCardIds(this.repo),
+          ]);
+
+          this.manifest = { data: manifestResult.data, handle: manifestResult.handle };
+          this.board = { data: boardResult.data, handle: boardResult.handle, dirty: false };
+
+          const loadedCards = await Promise.all(cardIds.map((id) => this.storage.readCard(this.repo, id)));
+          this.cards = new Map(
+            loadedCards.map((result) => [result.data.id, { data: result.data, handle: result.handle, dirty: false, deleted: false }]),
+          );
+
+          // Seed default columns on a freshly initialized, empty board so the
+          // Kanban UI has somewhere to put cards. Persisted on next save.
+          if (this.board.data.columns.length === 0) {
+            this.board.data = {
+              columns: Object.values(CardStatus).map((status) => ({ id: status, status, cardIds: [] })),
+            };
+            this.board.dirty = true;
+          }
+
+          this.emit();
+        }
+
+        get project() {
+          const cards = {};
+          for (const [id, tracked] of this.cards) if (!tracked.deleted) cards[id] = tracked.data;
+          return { manifest: this.manifest.data, board: this.board.data, cards };
+        }
+
+        dirtyPaths() {
+          const paths = [];
+          if (this.board.dirty) paths.push("board.json");
+          for (const [id, tracked] of this.cards) if (tracked.dirty || tracked.deleted) paths.push(`cards/${id}.json`);
+          return paths;
+        }
+
+        updateBoard(updater) {
+          this.board.data = updater(this.board.data);
+          this.board.dirty = true;
+          this.emit();
+        }
+
+        upsertCard(card) {
+          const existing = this.cards.get(card.id);
+          this.cards.set(card.id, { data: card, handle: existing ? existing.handle : null, dirty: true, deleted: false });
+          this.emit();
+        }
+
+        addCard({ title, status }) {
+          const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+          const now = new Date().toISOString();
+          const card = { id, title, status, description: "", tags: [], assignee: null, createdAt: now, updatedAt: now };
+          this.upsertCard(card);
+          this.updateBoard((board) => ({
+            columns: board.columns.map((col) => (col.status === status ? { ...col, cardIds: [...col.cardIds, id] } : col)),
+          }));
+          return card;
+        }
+
+        moveCard(cardId, toStatus) {
+          const tracked = this.cards.get(cardId);
+          if (!tracked || tracked.data.status === toStatus) return;
+          const fromStatus = tracked.data.status;
+          this.upsertCard({ ...tracked.data, status: toStatus, updatedAt: new Date().toISOString() });
+          this.updateBoard((board) => ({
+            columns: board.columns.map((col) => {
+              if (col.status === fromStatus) return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+              if (col.status === toStatus) return { ...col, cardIds: [...col.cardIds, cardId] };
+              return col;
+            }),
+          }));
+        }
+
+        deleteCard(cardId) {
+          const tracked = this.cards.get(cardId);
+          if (!tracked) return;
+          tracked.deleted = true;
+          this.updateBoard((board) => ({
+            columns: board.columns.map((col) => ({ ...col, cardIds: col.cardIds.filter((id) => id !== cardId) })),
+          }));
+        }
+
+        /** Manual save, per planning.md: "Save manually or autosave every few minutes." */
+        async save(message = "Planning updates") {
+          if (this.saving) return;
+          this.saving = true;
+          this.emit();
+
+          try {
+            // Deletions go out first, one at a time (the Contents API delete
+            // endpoint isn't part of the batch write shape).
+            for (const [id, tracked] of this.cards) {
+              if (tracked.deleted) {
+                if (tracked.handle) {
+                  await this.storage.deleteCard(this.repo, id, tracked.handle);
+                }
+                this.cards.delete(id);
+              }
+            }
+
+            const writes = [];
+            if (this.board.dirty) writes.push({ file: "board", data: this.board.data, handle: this.board.handle });
+            for (const [id, tracked] of this.cards) {
+              if (tracked.dirty) writes.push({ file: "card", cardId: id, data: tracked.data, handle: tracked.handle });
+            }
+
+            if (writes.length > 0) {
+              const result = await this.storage.commitBatch(this.repo, message, writes);
+              for (const handle of result.succeeded) {
+                if (handle.path === "board.json") {
+                  this.board.handle = handle;
+                  this.board.dirty = false;
+                } else if (handle.path.startsWith("cards/")) {
+                  const id = handle.path.slice("cards/".length, -".json".length);
+                  const tracked = this.cards.get(id);
+                  if (tracked) { tracked.handle = handle; tracked.dirty = false; }
+                }
+              }
+              this.conflicts = result.conflicts;
+            } else {
+              this.conflicts = [];
+            }
+          } finally {
+            this.saving = false;
+            this.emit();
+          }
+        }
+
+        /**
+         * Minimal conflict recovery: reload everything from GitHub, discarding
+         * local unsaved changes to the conflicting files. A real field-level
+         * merge (per planning.md's Sync section) is future work — this is the
+         * "prompt the user" half without the "auto-merge different fields" half.
+         */
+        async reloadDiscardingLocalChanges() {
+          await this.load();
+          this.conflicts = [];
+          this.emit();
+        }
+
+        startAutosave() {
+          this.stopAutosave();
+          this.autosaveTimer = setInterval(() => {
+            if (this.dirtyPaths().length > 0) this.save("Autosave").catch(() => {});
+          }, this.autosaveIntervalMs);
+        }
+
+        stopAutosave() {
+          if (this.autosaveTimer) clearInterval(this.autosaveTimer);
+          this.autosaveTimer = null;
+        }
+      }
+
+      function useWorkspace(storage, repo) {
+        const workspaceRef = useRef(null);
+        if (!workspaceRef.current) workspaceRef.current = new Workspace(storage, repo);
+        const workspace = workspaceRef.current;
+
+        const [, forceRender] = useState(0);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        useEffect(() => {
+          const unsubscribe = workspace.onChange(() => forceRender((n) => n + 1));
+          workspace.load()
+            .then(() => { setLoading(false); workspace.startAutosave(); })
+            .catch((err) => { setError(err.message); setLoading(false); });
+          return () => { unsubscribe(); workspace.stopAutosave(); };
+        }, [workspace]);
+
+        return {
+          loading,
+          error,
+          workspace,
+          project: loading ? null : workspace.project,
+          dirty: !loading && workspace.dirtyPaths().length > 0,
+          saving: workspace.saving,
+          conflicts: workspace.conflicts,
+        };
+      }
+
+      // =====================================================================
       // UI
       // =====================================================================
       const { useState, useEffect, useRef, useCallback } = React;
@@ -737,76 +1053,155 @@
         );
       }
 
-      function ProjectView({ repo, manifest, board, cardCount, onBack }) {
-        const columnCount = board.columns ? board.columns.length : 0;
+      function statusLabel(status) {
+        switch (status) {
+          case CardStatus.Backlog: return "Backlog";
+          case CardStatus.InProgress: return "In Progress";
+          case CardStatus.Blocked: return "Blocked";
+          case CardStatus.Done: return "Done";
+          default: return status;
+        }
+      }
+
+      function BoardWorkspace({ repo, storage, onBack }) {
+        const { loading, error, workspace, project, dirty, saving, conflicts } = useWorkspace(storage, repo);
+        const [newCardTitles, setNewCardTitles] = useState({});
+
+        // The board needs more horizontal room than the 560px centered card
+        // layout used everywhere else. Widen #root only while this component
+        // is mounted, restore it on unmount.
+        useEffect(() => {
+          const root = document.getElementById("root");
+          const previous = root.style.maxWidth;
+          root.style.maxWidth = "1100px";
+          return () => { root.style.maxWidth = previous; };
+        }, []);
+
+        if (loading) {
+          return (
+            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div className="status-line"><Spinner /> Loading project…</div>
+            </div>
+          );
+        }
+
+        if (error) {
+          return (
+            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div className="error-box">{error}</div>
+              <button onClick={onBack}>Back to repositories</button>
+            </div>
+          );
+        }
+
+        const { manifest, board, cards } = project;
+        const statuses = Object.values(CardStatus);
+        const nextStatus = (status) => statuses[(statuses.indexOf(status) + 1) % statuses.length];
+        const prevStatus = (status) => statuses[(statuses.indexOf(status) - 1 + statuses.length) % statuses.length];
+
+        const handleAddCard = (status) => {
+          const title = (newCardTitles[status] || "").trim();
+          if (!title) return;
+          workspace.addCard({ title, status });
+          setNewCardTitles((prev) => ({ ...prev, [status]: "" }));
+        };
 
         return (
-          <div className="card">
-            <p className="title" style={{ fontSize: 16 }}>{manifest.name}</p>
-            <p className="subtitle">{repo.full_name}{manifest.jam ? ` · ${manifest.jam}` : ""}{manifest.theme ? ` · Theme: ${manifest.theme}` : ""}</p>
+          <div>
+            <div className="breadcrumb">
+              <button onClick={onBack}>← Repositories</button>
+              <span>{repo.full_name}</span>
+            </div>
 
-            {manifest.description && (
-              <p style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 4 }}>{manifest.description}</p>
-            )}
-
-            <div className="stat-grid">
-              <div className="stat-box">
-                <div className="stat-value">{columnCount}</div>
-                <div className="stat-label">Board columns</div>
+            <div className="board-topbar">
+              <div>
+                <p className="title" style={{ fontSize: 18, marginBottom: 2 }}>{manifest.name}</p>
+                <p className="subtitle" style={{ marginBottom: 0 }}>
+                  {manifest.jam || "No jam set"}{manifest.theme ? ` · ${manifest.theme}` : ""}
+                </p>
               </div>
-              <div className="stat-box">
-                <div className="stat-value">{cardCount}</div>
-                <div className="stat-label">Cards</div>
+              <div className="board-topbar-actions">
+                {conflicts.length > 0 && (
+                  <div className="error-box" style={{ marginBottom: 0 }}>
+                    {conflicts.length} file{conflicts.length > 1 ? "s" : ""} changed on GitHub since this loaded.{" "}
+                    <button onClick={() => workspace.reloadDiscardingLocalChanges()}>Reload</button>
+                  </div>
+                )}
+                {saving && <span className="status-line"><Spinner /> Saving…</span>}
+                {!saving && dirty && <span className="status-line">Unsaved changes</span>}
+                {!saving && !dirty && <span className="status-line">All changes saved</span>}
+                <button className="btn-primary" disabled={!dirty || saving} onClick={() => workspace.save("Planning updates")}>
+                  Save
+                </button>
               </div>
             </div>
 
-            <p className="empty-state">Kanban board UI comes next — the workspace layer (dirty tracking, autosave, save) is the next piece of work per the handoff doc.</p>
+            <div className="board-columns">
+              {board.columns.map((col) => (
+                <div key={col.id} className="board-column">
+                  <div className="board-column-header">
+                    {statusLabel(col.status)}
+                    <span className="board-column-count">{col.cardIds.length}</span>
+                  </div>
 
-            <button onClick={onBack}>Back to repositories</button>
+                  <div className="board-column-cards">
+                    {col.cardIds.map((cardId) => {
+                      const card = cards[cardId];
+                      if (!card) return null;
+                      return (
+                        <div key={cardId} className="board-card">
+                          <div className="board-card-title">{card.title}</div>
+                          <div className="board-card-actions">
+                            <button title="Move left" onClick={() => workspace.moveCard(cardId, prevStatus(card.status))}>◀</button>
+                            <button title="Move right" onClick={() => workspace.moveCard(cardId, nextStatus(card.status))}>▶</button>
+                            <button title="Delete" className="board-card-delete" onClick={() => workspace.deleteCard(cardId)}>×</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="add-card-row">
+                    <input
+                      placeholder="New card…"
+                      value={newCardTitles[col.status] || ""}
+                      onChange={(e) => setNewCardTitles((prev) => ({ ...prev, [col.status]: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddCard(col.status); }}
+                    />
+                    <button onClick={() => handleAddCard(col.status)}>+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         );
       }
 
       function ProjectGate({ repo, storage, onBack }) {
         const [phase, setPhase] = useState("checking"); // checking | not-found | loaded | error
-        const [manifest, setManifest] = useState(null);
-        const [board, setBoard] = useState(null);
-        const [cardCount, setCardCount] = useState(0);
         const [error, setError] = useState(null);
 
-        const loadProject = useCallback(async () => {
+        useEffect(() => {
+          let cancelled = false;
           setPhase("checking");
           setError(null);
-          try {
-            const exists = await storage.detectProject(repo);
-            if (!exists) {
-              setPhase("not-found");
-              return;
-            }
-            const [manifestResult, boardResult, cardIds] = await Promise.all([
-              storage.readManifest(repo),
-              storage.readBoard(repo),
-              storage.listCardIds ? storage.listCardIds(repo) : Promise.resolve([]),
-            ]);
-            setManifest(manifestResult.data);
-            setBoard(boardResult.data);
-            setCardCount(cardIds.length);
-            setPhase("loaded");
-          } catch (err) {
-            setError(err.message);
-            setPhase("error");
-          }
+          storage.detectProject(repo)
+            .then((exists) => { if (!cancelled) setPhase(exists ? "loaded" : "not-found"); })
+            .catch((err) => { if (!cancelled) { setError(err.message); setPhase("error"); } });
+          return () => { cancelled = true; };
         }, [repo, storage]);
 
-        useEffect(() => { loadProject(); }, [loadProject]);
-
         if (phase === "checking") {
-          return <div className="card"><div className="status-line"><Spinner /> Checking {repo.full_name} for a game jam project…</div></div>;
+          return (
+            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div className="status-line"><Spinner /> Checking {repo.full_name} for a game jam project…</div>
+            </div>
+          );
         }
 
         if (phase === "error") {
           return (
-            <div className="card">
+            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
               <div className="error-box">{error}</div>
               <button onClick={onBack}>Back to repositories</button>
             </div>
@@ -814,10 +1209,10 @@
         }
 
         if (phase === "not-found") {
-          return <InitProjectForm repo={repo} storage={storage} onInitialized={() => loadProject()} />;
+          return <InitProjectForm repo={repo} storage={storage} onInitialized={() => setPhase("loaded")} />;
         }
 
-        return <ProjectView repo={repo} manifest={manifest} board={board} cardCount={cardCount} onBack={onBack} />;
+        return <BoardWorkspace repo={repo} storage={storage} onBack={onBack} />;
       }
 
       function App() {
