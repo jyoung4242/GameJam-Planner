@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game Jam Planner</title>
-     <link rel="icon" href="/favicon.ico" sizes="any">
     <style>
       :root {
         --bg: #0f1115;
@@ -707,8 +706,12 @@
         animation: sync-pulse 1s infinite alternate;
       }
       @keyframes sync-pulse {
-        from { opacity: 0.3; }
-        to { opacity: 1; }
+        from {
+          opacity: 0.3;
+        }
+        to {
+          opacity: 1;
+        }
       }
     </style>
   </head>
@@ -2054,4 +2057,145 @@
                   <div className="empty-state">No team members found</div>
                 ) : (
                   team.map((m) => (
-                    <div key={m.
+                    <div key={m.login} className="team-row">
+                      <img src={m.avatarUrl} alt={m.login} />
+                      <span className="team-login">{m.login}</span>
+                      <span className="badge">{m.permission}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function TeamView({ storage, repo }) {
+        const [team, setTeam] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState(null);
+
+        React.useEffect(() => {
+          storage
+            .listCollaboratorsWithPermissions(repo)
+            .then((res) => {
+              setTeam(res);
+              setLoading(false);
+            })
+            .catch((err) => {
+              setError(err.message || "Failed to load team");
+              setLoading(false);
+            });
+        }, [storage, repo]);
+
+        if (loading) {
+          return (
+            <div className="status-line">
+              <div className="spinner"></div>
+              <span>Loading team members...</span>
+            </div>
+          );
+        }
+
+        return (
+          <div>
+            <h2 className="title" style={{ fontSize: "20px", marginBottom: "16px" }}>Team Collaborators</h2>
+            {error && <div className="error-box">{error}</div>}
+            <div className="dashboard-panel">
+              {team.map((m) => (
+                <div key={m.login} className="team-row" style={{ padding: "12px 0" }}>
+                  <img src={m.avatarUrl} alt={m.login} style={{ width: "36px", height: "36px" }} />
+                  <div>
+                    <div style={{ fontWeight: "600", fontSize: "14px" }}>{m.login}</div>
+                    <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>Repository Collaborator</div>
+                  </div>
+                  <span className="badge" style={{ fontSize: "12px", padding: "4px 10px" }}>{m.permission}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function ProjectShell({ repo, storage, onBack }) {
+        const { ws, loading } = useWorkspace(repo, storage);
+        const [activeTab, setActiveTab] = React.useState("board");
+
+        if (loading || !ws) {
+          return (
+            <div className="card">
+              <div className="status-line">
+                <div className="spinner"></div>
+                <span>Syncing workspace files with GitHub...</span>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div style={{ width: "100%", maxWidth: "960px", margin: "0 auto" }}>
+            <Header repo={repo} ws={ws} onBack={onBack} />
+
+            <div className="view-tabs">
+              <button className={activeTab === "board" ? "active" : ""} onClick={() => setActiveTab("board")}>
+                Kanban Board
+              </button>
+              <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => setActiveTab("dashboard")}>
+                Dashboard
+              </button>
+              <button className={activeTab === "team" ? "active" : ""} onClick={() => setActiveTab("team")}>
+                Team
+              </button>
+            </div>
+
+            {activeTab === "board" && <BoardView ws={ws} storage={storage} repo={repo} />}
+            {activeTab === "dashboard" && <DashboardView ws={ws} storage={storage} repo={repo} />}
+            {activeTab === "team" && <TeamView storage={storage} repo={repo} />}
+          </div>
+        );
+      }
+
+      function App() {
+        const auth = React.useMemo(() => new GitHubDeviceFlowAuth(), []);
+        const [selectedRepo, setSelectedRepo] = React.useState(null);
+
+        return (
+          <AuthGate auth={auth}>
+            {(user) => {
+              const storage = new GitHubStorage(user.accessToken);
+
+              if (!selectedRepo) {
+                return (
+                  <RepoPicker
+                    storage={storage}
+                    onLogout={() => auth.logout()}
+                    onSelectRepo={(repo) => setSelectedRepo({
+                      owner: repo.owner.login,
+                      name: repo.name,
+                      full_name: repo.full_name,
+                    })}
+                  />
+                );
+              }
+
+              return <ProjectGate repo={selectedRepo} storage={storage} onBack={() => setSelectedRepo(null)} />;
+            }}
+          </AuthGate>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+
+    <script>
+      const source = document.getElementById("app-source").textContent;
+      const { code } = Babel.transform(source, {
+        presets: [["react", { runtime: "classic" }]],
+      });
+      const script = document.createElement("script");
+      script.textContent = code;
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
