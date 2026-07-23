@@ -29,8 +29,17 @@
         justify-content: center;
         padding: 24px;
       }
+      /* Replace the current #root rule */
       #root {
         width: 100%;
+        max-width: 520px; /* Default narrow layout for Auth, Repo Picker, Initializer */
+        margin: 0 auto;
+        transition: max-width 0.2s ease;
+      }
+
+      /* Add wide container rule for when the main app workspace is open */
+      #root.app-workspace,
+      .app-workspace {
         max-width: 1200px;
       }
       .card {
