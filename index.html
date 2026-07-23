@@ -197,6 +197,74 @@
         text-align: center;
         padding: 24px 0;
       }
+      .field {
+        margin-bottom: 16px;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-bottom: 6px;
+      }
+      .field input,
+      .field textarea {
+        width: 100%;
+        font: inherit;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+      .field input:focus,
+      .field textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .field textarea {
+        resize: vertical;
+        min-height: 64px;
+      }
+      .row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .breadcrumb button {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .stat-box {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+      }
+      .stat-box .stat-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .stat-box .stat-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
     </style>
   </head>
   <body>
@@ -605,6 +673,153 @@
         );
       }
 
+      function InitProjectForm({ repo, storage, onInitialized }) {
+        const [name, setName] = useState(repo.name);
+        const [description, setDescription] = useState("");
+        const [jam, setJam] = useState("");
+        const [theme, setTheme] = useState("");
+        const [saving, setSaving] = useState(false);
+        const [error, setError] = useState(null);
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          setSaving(true);
+          setError(null);
+          try {
+            const manifest = {
+              id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+              name,
+              description,
+              jam,
+              theme,
+              createdAt: new Date().toISOString(),
+              storage: { kind: StorageProviderKind.GitHub, githubOwner: repo.owner, githubRepo: repo.name },
+            };
+            await storage.initProject(repo, manifest);
+            onInitialized(manifest);
+          } catch (err) {
+            setError(err.message);
+            setSaving(false);
+          }
+        };
+
+        return (
+          <div className="card">
+            <p className="title" style={{ fontSize: 16 }}>Set up this repository</p>
+            <p className="subtitle">No game jam project found in {repo.full_name} yet. Let's create one.</p>
+
+            {error && <div className="error-box">{error}</div>}
+
+            <form onSubmit={handleSubmit}>
+              <div className="field">
+                <label>Project name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="field">
+                <label>Description</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's the game about?" />
+              </div>
+              <div className="row-2">
+                <div className="field">
+                  <label>Jam</label>
+                  <input value={jam} onChange={(e) => setJam(e.target.value)} placeholder="e.g. Ludum Dare 57" />
+                </div>
+                <div className="field">
+                  <label>Theme</label>
+                  <input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="e.g. Depths" />
+                </div>
+              </div>
+              <button className="btn-primary" type="submit" disabled={saving}>
+                {saving ? "Creating…" : "Initialize project"}
+              </button>
+            </form>
+          </div>
+        );
+      }
+
+      function ProjectView({ repo, manifest, board, cardCount, onBack }) {
+        const columnCount = board.columns ? board.columns.length : 0;
+
+        return (
+          <div className="card">
+            <p className="title" style={{ fontSize: 16 }}>{manifest.name}</p>
+            <p className="subtitle">{repo.full_name}{manifest.jam ? ` · ${manifest.jam}` : ""}{manifest.theme ? ` · Theme: ${manifest.theme}` : ""}</p>
+
+            {manifest.description && (
+              <p style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 4 }}>{manifest.description}</p>
+            )}
+
+            <div className="stat-grid">
+              <div className="stat-box">
+                <div className="stat-value">{columnCount}</div>
+                <div className="stat-label">Board columns</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-value">{cardCount}</div>
+                <div className="stat-label">Cards</div>
+              </div>
+            </div>
+
+            <p className="empty-state">Kanban board UI comes next — the workspace layer (dirty tracking, autosave, save) is the next piece of work per the handoff doc.</p>
+
+            <button onClick={onBack}>Back to repositories</button>
+          </div>
+        );
+      }
+
+      function ProjectGate({ repo, storage, onBack }) {
+        const [phase, setPhase] = useState("checking"); // checking | not-found | loaded | error
+        const [manifest, setManifest] = useState(null);
+        const [board, setBoard] = useState(null);
+        const [cardCount, setCardCount] = useState(0);
+        const [error, setError] = useState(null);
+
+        const loadProject = useCallback(async () => {
+          setPhase("checking");
+          setError(null);
+          try {
+            const exists = await storage.detectProject(repo);
+            if (!exists) {
+              setPhase("not-found");
+              return;
+            }
+            const [manifestResult, boardResult, cardIds] = await Promise.all([
+              storage.readManifest(repo),
+              storage.readBoard(repo),
+              storage.listCardIds ? storage.listCardIds(repo) : Promise.resolve([]),
+            ]);
+            setManifest(manifestResult.data);
+            setBoard(boardResult.data);
+            setCardCount(cardIds.length);
+            setPhase("loaded");
+          } catch (err) {
+            setError(err.message);
+            setPhase("error");
+          }
+        }, [repo, storage]);
+
+        useEffect(() => { loadProject(); }, [loadProject]);
+
+        if (phase === "checking") {
+          return <div className="card"><div className="status-line"><Spinner /> Checking {repo.full_name} for a game jam project…</div></div>;
+        }
+
+        if (phase === "error") {
+          return (
+            <div className="card">
+              <div className="error-box">{error}</div>
+              <button onClick={onBack}>Back to repositories</button>
+            </div>
+          );
+        }
+
+        if (phase === "not-found") {
+          return <InitProjectForm repo={repo} storage={storage} onInitialized={() => loadProject()} />;
+        }
+
+        return <ProjectView repo={repo} manifest={manifest} board={board} cardCount={cardCount} onBack={onBack} />;
+      }
+
       function App() {
         const authRef = useRef(null);
         if (!authRef.current) authRef.current = new GitHubDeviceFlowAuth();
@@ -636,21 +851,19 @@
               user={user}
               storage={storage}
               onLogout={handleLogout}
-              onSelectRepo={(repo) => setSelectedRepo(repo)}
+              onSelectRepo={(repo) => setSelectedRepo({
+                // Normalize the raw GitHub API repo shape (repo.owner is an
+                // object) into the plain { owner, name } string pair that
+                // GitHubStorage's RepositoryRef expects.
+                owner: repo.owner.login,
+                name: repo.name,
+                full_name: repo.full_name,
+              })}
             />
           );
         }
 
-        // Next step: detectProject() -> either open the existing .gamejam/
-        // workspace or offer to initialize one, per planning.md's
-        // "GitHub Flow" section. Wiring that up is the next piece of work.
-        return (
-          <div className="card">
-            <p className="title" style={{ fontSize: 16 }}>{selectedRepo.full_name}</p>
-            <p className="subtitle">Repository selected. Workspace init/open comes next.</p>
-            <button onClick={() => setSelectedRepo(null)}>Back to repositories</button>
-          </div>
-        );
+        return <ProjectGate repo={selectedRepo} storage={storage} onBack={() => setSelectedRepo(null)} />;
       }
 
       const root = ReactDOM.createRoot(document.getElementById("root"));
