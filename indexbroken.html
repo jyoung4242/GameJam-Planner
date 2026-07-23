@@ -1,0 +1,1962 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game Jam Planner</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-border: #262b36;
+        --text: #e7e9ee;
+        --text-dim: #9aa2b1;
+        --accent: #6ee7b7;
+        --accent-dim: #2e5a4a;
+        --danger: #f87171;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      /* Replace the current #root rule */
+      #root {
+        width: 100%;
+        max-width: 520px; /* Default narrow layout for Auth, Repo Picker, Initializer */
+        margin: 0 auto;
+        transition: max-width 0.2s ease;
+      }
+
+      /* Add wide container rule for when the main app workspace is open */
+      #root.app-workspace,
+      .app-workspace {
+        max-width: 1200px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 32px;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 14px;
+        margin: 0 0 24px;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
+        background: #1f232c;
+        color: var(--text);
+        padding: 10px 16px;
+        transition: border-color 0.15s;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #0f1115;
+        border-color: var(--accent);
+        font-weight: 600;
+        width: 100%;
+        padding: 12px 16px;
+      }
+      .btn-primary:hover {
+        filter: brightness(1.05);
+      }
+      .device-code-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #0f1115;
+        border: 1px dashed var(--panel-border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 20px 0;
+      }
+
+      .device-code {
+        font-size: 32px;
+        letter-spacing: 4px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--accent);
+        margin: 0;
+      }
+
+      .copy-btn {
+        background: #171a21;
+        border: 1px solid var(--panel-border);
+        color: var(--text-dim);
+        padding: 8px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
+      }
+
+      .copy-btn:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-top: 16px;
+      }
+      .spinner {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid var(--panel-border);
+        border-top-color: var(--accent);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .error-box {
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .repo-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .repo-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .repo-item:hover {
+        border-color: var(--accent);
+        background: #1b1f27;
+      }
+      .repo-name {
+        font-weight: 500;
+      }
+      .repo-meta {
+        color: var(--text-dim);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .badge {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--accent-dim);
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .user-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+      .user-row img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+      }
+      .user-row .name {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .user-row .login {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .link-btn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 12px;
+        padding: 4px;
+        margin-left: auto;
+      }
+      .link-btn:hover {
+        color: var(--text);
+        border-color: transparent;
+      }
+      a.verify-link {
+        color: var(--accent);
+      }
+      .empty-state {
+        color: var(--text-dim);
+        font-size: 13px;
+        text-align: center;
+        padding: 24px 0;
+      }
+      .field {
+        margin-bottom: 16px;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-bottom: 6px;
+      }
+      .field input,
+      .field textarea {
+        width: 100%;
+        font: inherit;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+      .field input:focus,
+      .field textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .field textarea {
+        resize: vertical;
+        min-height: 64px;
+      }
+      .row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .breadcrumb button {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .stat-box {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+      }
+      .stat-box .stat-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .stat-box .stat-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+
+      .board-topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .board-topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .board-topbar-actions button.btn-primary {
+        width: auto;
+        padding: 8px 20px;
+      }
+      .board-columns {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+      .board-column {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 14px;
+        width: 260px;
+        flex: 0 0 260px;
+        display: flex;
+        flex-direction: column;
+        max-height: max(320px, calc(100vh - 220px));
+      }
+      .board-column-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 10px;
+      }
+      .board-column-count {
+        background: #0f1115;
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+      }
+      .board-column-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 24px;
+        margin-bottom: 10px;
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .board-column-cards::-webkit-scrollbar {
+        width: 6px;
+      }
+      .board-column-cards::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .board-column-cards::-webkit-scrollbar-thumb {
+        background: var(--panel-border);
+        border-radius: 999px;
+      }
+      .board-column-cards::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-dim);
+      }
+      .board-card {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .board-card-title {
+        font-size: 13px;
+        margin-bottom: 8px;
+        overflow-wrap: anywhere;
+      }
+      .board-card-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .board-card-actions button {
+        padding: 3px 8px;
+        font-size: 11px;
+        border-radius: 6px;
+      }
+      .board-card-delete {
+        margin-left: auto;
+        color: var(--danger);
+      }
+      .add-card-row {
+        display: flex;
+        gap: 6px;
+      }
+      .add-card-row input {
+        flex: 1;
+        font-size: 13px;
+        padding: 7px 10px;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+      }
+      .add-card-row button {
+        padding: 7px 12px;
+      }
+
+      .board-column.drag-over {
+        border-color: var(--accent);
+        background: #1b1f27;
+      }
+      .board-card {
+        cursor: pointer;
+        border-left: 3px solid var(--panel-border);
+        transition:
+          opacity 0.15s,
+          border-color 0.15s,
+          transform 0.1s;
+      }
+      .board-card:hover {
+        border-color: var(--accent);
+      }
+      .board-card.dragging {
+        opacity: 0.4;
+      }
+      .board-card--backlog {
+        border-left-color: #6b7280;
+      }
+      .board-card--in-progress {
+        border-left-color: #60a5fa;
+      }
+      .board-card--blocked {
+        border-left-color: var(--danger);
+      }
+      .board-card--done {
+        border-left-color: var(--accent);
+      }
+
+      .card-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .tag-pill {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #1f232c;
+        color: var(--text-dim);
+        border: 1px solid var(--panel-border);
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .avatar-badge {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent-dim);
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 50;
+      }
+      .modal-panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 28px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 85vh;
+        overflow-y: auto;
+      }
+      .modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 18px;
+        line-height: 1;
+        padding: 4px;
+      }
+      .modal-close:hover {
+        color: var(--text);
+        border-color: transparent;
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 20px;
+        gap: 12px;
+      }
+      .modal-footer .btn-primary {
+        width: auto;
+        padding: 10px 24px;
+      }
+      .btn-danger-text {
+        background: none;
+        border: none;
+        color: var(--danger);
+        padding: 8px 4px;
+      }
+      .btn-danger-text:hover {
+        border-color: transparent;
+        text-decoration: underline;
+      }
+      .status-select {
+        width: 100%;
+        font: inherit;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+      .field-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .field-header label {
+        margin-bottom: 0;
+      }
+      .mic-button {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .mic-button.listening {
+        border-color: var(--danger);
+        color: var(--danger);
+        animation: mic-pulse 1.2s infinite;
+      }
+      .mic-button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      @keyframes mic-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(248, 113, 113, 0);
+        }
+      }
+      .interim-text {
+        font-size: 12px;
+        color: var(--text-dim);
+        font-style: italic;
+        margin-top: 6px;
+      }
+      .speech-error {
+        font-size: 12px;
+        color: var(--danger);
+        margin-top: 6px;
+      }
+      .view-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .view-tabs button {
+        background: none;
+        border: none;
+        border-radius: 0;
+        border-bottom: 2px solid transparent;
+        padding: 10px 4px;
+        margin-right: 20px;
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      .view-tabs button:hover {
+        border-color: var(--panel-border);
+        color: var(--text);
+      }
+      .view-tabs button.active {
+        color: var(--accent);
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .dashboard-stat {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 18px;
+        text-align: center;
+      }
+      .dashboard-stat .stat-value {
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .dashboard-stat .stat-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 4px;
+      }
+      .dashboard-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 720px) {
+        .dashboard-columns {
+          grid-template-columns: 1fr;
+        }
+      }
+      .dashboard-panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .dashboard-panel h3 {
+        font-size: 15px;
+        margin: 0 0 16px 0;
+      }
+      .activity-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .activity-item {
+        border-bottom: 1px solid var(--panel-border);
+        padding: 10px 0;
+        font-size: 13px;
+      }
+      .activity-item:last-child {
+        border-bottom: none;
+      }
+      .activity-msg {
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .activity-meta {
+        color: var(--text-dim);
+        font-size: 11px;
+      }
+      .team-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .team-card {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .team-card img {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+      }
+      .team-card-name {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .team-card-perm {
+        color: var(--text-dim);
+        font-size: 11px;
+        text-transform: capitalize;
+      }
+    </style>
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script id="app-source" type="text/jsx">
+      const CONFIG = {
+        clientId: "Ov23liy7kjuppgIY5yU1",
+        relayBaseUrl: "https://little-grass-e4c2gamejam-planner-auth-relay.jyoung4242.workers.dev",
+        scope: "repo",
+      };
+
+      const STORAGE_KEYS = {
+        ACCESS_TOKEN: "gjp_github_token",
+        USER_DATA: "gjp_github_user",
+      };
+
+      const AuthStatus = {
+        Idle: "IDLE",
+        Starting: "STARTING",
+        AwaitingUserVerification: "AWAITING_VERIFICATION",
+        Polling: "POLLING",
+        Success: "SUCCESS",
+        Error: "ERROR",
+      };
+
+      class GitHubAuth {
+        constructor(config) {
+          this.config = config;
+        }
+
+        getStoredUser() {
+          const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+          const rawUser = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+          if (token && rawUser) {
+            try {
+              return { accessToken: token, profile: JSON.parse(rawUser) };
+            } catch (e) {
+              return null;
+            }
+          }
+          return null;
+        }
+
+        saveUserSession(token, profile) {
+          localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+          localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(profile));
+        }
+
+        logout() {
+          localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+          localStorage.removeItem(STORAGE_KEYS.USER_DATA);
+        }
+
+        async requestDeviceCode() {
+          const res = await fetch(`${this.config.relayBaseUrl}/login/device/code`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: this.config.clientId,
+              scope: this.config.scope,
+            }),
+          });
+          if (!res.ok) throw new Error(`Device code request failed: ${res.status}`);
+          return res.json();
+        }
+
+        async pollForAccessToken(deviceCode) {
+          const res = await fetch(`${this.config.relayBaseUrl}/login/oauth/access_token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: this.config.clientId,
+              device_code: deviceCode,
+              grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+            }),
+          });
+          if (!res.ok) throw new Error(`Access token request failed: ${res.status}`);
+          return res.json();
+        }
+
+        async fetchUserProfile(accessToken) {
+          const res = await fetch("https://api.github.com/user", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (!res.ok) throw new Error(`Fetch user failed: ${res.status}`);
+          return res.json();
+        }
+      }
+
+      function useGitHubDeviceFlow(authService) {
+        const [state, setState] = React.useState({
+          status: AuthStatus.Idle,
+          userCode: "",
+          verificationUri: "",
+          verificationUriComplete: "",
+          error: null,
+          user: authService.getStoredUser(),
+        });
+
+        const cancelRef = React.useRef(false);
+
+        const startAuth = React.useCallback(async () => {
+          cancelRef.current = false;
+          setState(s => ({ ...s, status: AuthStatus.Starting, error: null }));
+
+          try {
+            const data = await authService.requestDeviceCode();
+            if (cancelRef.current) return;
+
+            const intervalMs = (data.interval || 5) * 1000;
+            const expiresInMs = (data.expires_in || 900) * 1000;
+            const deadline = Date.now() + expiresInMs;
+
+            setState(s => ({
+              ...s,
+              status: AuthStatus.AwaitingUserVerification,
+              userCode: data.user_code,
+              verificationUri: data.verification_uri,
+              verificationUriComplete: data.verification_uri_complete || data.verification_uri,
+            }));
+
+            while (Date.now() < deadline && !cancelRef.current) {
+              await new Promise(r => setTimeout(r, intervalMs));
+              if (cancelRef.current) return;
+
+              try {
+                const tokenData = await authService.pollForAccessToken(data.device_code);
+
+                if (tokenData.access_token) {
+                  const profile = await authService.fetchUserProfile(tokenData.access_token);
+                  authService.saveUserSession(tokenData.access_token, profile);
+
+                  if (!cancelRef.current) {
+                    setState({
+                      status: AuthStatus.Success,
+                      userCode: "",
+                      verificationUri: "",
+                      verificationUriComplete: "",
+                      error: null,
+                      user: { accessToken: tokenData.access_token, profile },
+                    });
+                  }
+                  return;
+                }
+
+                if (tokenData.error === "authorization_pending") continue;
+                if (tokenData.error === "slow_down") {
+                  await new Promise(r => setTimeout(r, 5000));
+                  continue;
+                }
+                throw new Error(tokenData.error_description || tokenData.error || "Authentication failed");
+              } catch (err) {
+                if (err.message.includes("authorization_pending")) continue;
+                throw err;
+              }
+            }
+
+            if (!cancelRef.current) {
+              throw new Error("Device code expired. Please try again.");
+            }
+          } catch (err) {
+            if (!cancelRef.current) {
+              setState(s => ({ ...s, status: AuthStatus.Error, error: err.message }));
+            }
+          }
+        }, [authService]);
+
+        const logout = React.useCallback(() => {
+          cancelRef.current = true;
+          authService.logout();
+          setState({
+            status: AuthStatus.Idle,
+            userCode: "",
+            verificationUri: "",
+            verificationUriComplete: "",
+            error: null,
+            user: null,
+          });
+        }, [authService]);
+
+        return { ...state, startAuth, logout };
+      }
+
+      function GitHubAuthGate({ auth, children }) {
+        const state = useGitHubDeviceFlow(auth);
+        const [copied, setCopied] = React.useState(false);
+
+        if (state.user) {
+          return children(state.user, state.logout);
+        }
+
+        const handleCopyCode = () => {
+          if (state.userCode) {
+            navigator.clipboard.writeText(state.userCode);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }
+        };
+
+        return (
+          <div className="card">
+            <h1 className="title">Game Jam Planner</h1>
+            <p className="subtitle">Sign in with GitHub to access or create a planner repo.</p>
+
+            {state.error && <div className="error-box">{state.error}</div>}
+
+            {state.status === AuthStatus.Idle && (
+              <button className="btn-primary" onClick={state.startAuth}>
+                Connect GitHub Account
+              </button>
+            )}
+
+            {state.status === AuthStatus.Starting && (
+              <div className="status-line">
+                <div className="spinner"></div>
+                <span>Requesting device code...</span>
+              </div>
+            )}
+
+            {state.status === AuthStatus.AwaitingUserVerification && (
+              <div>
+                <p style={{ fontSize: "13px", color: "var(--text-dim)", margin: 0 }}>Enter this code on GitHub to authorize:</p>
+                <div className="device-code-container">
+                  <div className="device-code">{state.userCode}</div>
+                  <button type="button" className="copy-btn" onClick={handleCopyCode}>
+                    {copied ? "✓ Copied" : "📋 Copy"}
+                  </button>
+                </div>
+                <a
+                  href={state.verificationUriComplete}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="verify-link"
+                  style={{ display: "block", textAlign: "center", fontSize: "14px", fontWeight: "600", marginBottom: "16px" }}
+                >
+                  Open GitHub Verification Page &rarr;
+                </a>
+                <div className="status-line" style={{ justifyContent: "center" }}>
+                  <div className="spinner"></div>
+                  <span>Waiting for authorization...</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      class GitHubStorage {
+        constructor(token) {
+          this.token = token;
+        }
+
+        authHeaders() {
+          return {
+            Authorization: `Bearer ${this.token}`,
+            Accept: "application/vnd.github.v3+json",
+          };
+        }
+
+        async listRepositories() {
+          const res = await fetch("https://api.github.com/user/repos?sort=updated&per_page=100", {
+            headers: this.authHeaders(),
+          });
+          if (!res.ok) throw new Error(`Failed to fetch repositories (${res.status})`);
+          return res.json();
+        }
+
+        async getFile(repo, path) {
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${path}`, {
+            headers: this.authHeaders(),
+          });
+          if (res.status === 404) return null;
+          if (!res.ok) throw new Error(`Failed to fetch ${path} (${res.status})`);
+          const data = await res.json();
+          const text = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+          return { sha: data.sha, content: JSON.parse(text) };
+        }
+
+        async saveFile(repo, path, content, sha, message) {
+          const jsonString = JSON.stringify(content, null, 2);
+          const encoded = btoa(unescape(encodeURIComponent(jsonString)));
+          const body = {
+            message: message || `Update ${path}`,
+            content: encoded,
+            ...(sha ? { sha } : {}),
+          };
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${path}`, {
+            method: "PUT",
+            headers: {
+              ...this.authHeaders(),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || `Failed to save ${path} (${res.status})`);
+          }
+          return res.json();
+        }
+
+        async createRepository(name, isPrivate) {
+          const res = await fetch("https://api.github.com/user/repos", {
+            method: "POST",
+            headers: {
+              ...this.authHeaders(),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name,
+              private: isPrivate,
+              auto_init: true,
+              description: "Game Jam Planner Project",
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || `Failed to create repository (${res.status})`);
+          }
+          return res.json();
+        }
+
+        async listCommits(repo) {
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/commits?path=.gamejam&per_page=20`, {
+            headers: this.authHeaders(),
+          });
+          if (!res.ok) return [];
+          return res.json();
+        }
+
+        async listCollaborators(repo) {
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`, {
+            headers: this.authHeaders(),
+          });
+          if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
+          return res.json();
+        }
+      }
+
+      function RepoPicker({ storage, onSelectRepo, onLogout }) {
+        const [repos, setRepos] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState(null);
+        const [mode, setMode] = React.useState("select"); // 'select' | 'create'
+        const [newRepoName, setNewRepoName] = React.useState("");
+        const [isPrivate, setIsPrivate] = React.useState(true);
+        const [creating, setCreating] = React.useState(false);
+
+        React.useEffect(() => {
+          let cancel = false;
+          setLoading(true);
+          storage
+            .listRepositories()
+            .then(list => {
+              if (!cancel) {
+                setRepos(list);
+                setLoading(false);
+              }
+            })
+            .catch(err => {
+              if (!cancel) {
+                setError(err.message);
+                setLoading(false);
+              }
+            });
+          return () => {
+            cancel = true;
+          };
+        }, [storage]);
+
+        const handleCreate = async e => {
+          e.preventDefault();
+          if (!newRepoName.trim()) return;
+          setCreating(true);
+          setError(null);
+          try {
+            const created = await storage.createRepository(newRepoName.trim(), isPrivate);
+            onSelectRepo(created);
+          } catch (err) {
+            setError(err.message);
+            setCreating(false);
+          }
+        };
+
+        return (
+          <div className="card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h1 className="title">Select Repository</h1>
+              <button className="link-btn" onClick={onLogout}>
+                Sign Out
+              </button>
+            </div>
+            <p className="subtitle">Choose an existing repository or create a new one for your project.</p>
+
+            {error && <div className="error-box">{error}</div>}
+
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <button className={mode === "select" ? "btn-primary" : ""} style={{ flex: 1 }} onClick={() => setMode("select")}>
+                Existing Repo
+              </button>
+              <button className={mode === "create" ? "btn-primary" : ""} style={{ flex: 1 }} onClick={() => setMode("create")}>
+                New Repo
+              </button>
+            </div>
+
+            {mode === "select" && (
+              <div>
+                {loading && (
+                  <div className="status-line">
+                    <div className="spinner"></div>
+                    <span>Loading repositories...</span>
+                  </div>
+                )}
+                {!loading && repos.length === 0 && <p className="empty-state">No repositories found.</p>}
+                {!loading && repos.length > 0 && (
+                  <ul className="repo-list">
+                    {repos.map(repo => (
+                      <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
+                        <div>
+                          <div className="repo-name">{repo.full_name}</div>
+                          <div className="repo-meta">Updated {new Date(repo.updated_at).toLocaleDateString()}</div>
+                        </div>
+                        <span className="badge">{repo.private ? "Private" : "Public"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {mode === "create" && (
+              <form onSubmit={handleCreate}>
+                <div className="field">
+                  <label>Repository Name</label>
+                  <input
+                    type="text"
+                    value={newRepoName}
+                    onChange={e => setNewRepoName(e.target.value)}
+                    placeholder="my-game-jam"
+                    required
+                  />
+                </div>
+                <div className="field" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="checkbox"
+                    id="priv"
+                    checked={isPrivate}
+                    onChange={e => setIsPrivate(e.target.checked)}
+                    style={{ width: "auto" }}
+                  />
+                  <label htmlFor="priv" style={{ margin: 0, cursor: "pointer" }}>
+                    Make repository private
+                  </label>
+                </div>
+                <button type="submit" className="btn-primary" disabled={creating || !newRepoName.trim()}>
+                  {creating ? "Creating..." : "Create & Select"}
+                </button>
+              </form>
+            )}
+          </div>
+        );
+      }
+
+      function useWorkspace(storage, repo) {
+        const [project, setProject] = React.useState(null);
+        const [board, setBoard] = React.useState(null);
+        const [shas, setShas] = React.useState({});
+        const [loading, setLoading] = React.useState(true);
+        const [saving, setSaving] = React.useState(false);
+        const [error, setError] = React.useState(null);
+        const [isDirty, setIsDirty] = React.useState(false);
+        const [conflict, setConflict] = React.useState(false);
+
+        const loadWorkspace = React.useCallback(async () => {
+          setLoading(true);
+          setError(null);
+          try {
+            const projFile = await storage.getFile(repo, ".gamejam/project.json");
+            const boardFile = await storage.getFile(repo, ".gamejam/board.json");
+
+            if (projFile && boardFile) {
+              setProject(projFile.content);
+              setBoard(boardFile.content);
+              setShas({
+                project: projFile.sha,
+                board: boardFile.sha,
+              });
+            } else {
+              setProject(null);
+              setBoard(null);
+            }
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }, [storage, repo]);
+
+        React.useEffect(() => {
+          loadWorkspace();
+        }, [loadWorkspace]);
+
+        const initWorkspace = async details => {
+          setLoading(true);
+          setError(null);
+          try {
+            const initialProject = {
+              name: details.name,
+              description: details.description || "",
+              jam: details.jam || "",
+              theme: details.theme || "",
+              created_at: new Date().toISOString(),
+            };
+            const initialBoard = {
+              columns: [
+                { id: "backlog", title: "Backlog" },
+                { id: "in-progress", title: "In Progress" },
+                { id: "blocked", title: "Blocked" },
+                { id: "done", title: "Done" },
+              ],
+              cards: [
+                {
+                  id: "card-1",
+                  title: "Setup Unity / Godot Project",
+                  description: "Initialize repository and set up folder structure.",
+                  status: "done",
+                  tag: "Tech",
+                },
+                {
+                  id: "card-2",
+                  title: "Design Player Movement",
+                  description: "Implement basic locomotion and jump feel.",
+                  status: "in-progress",
+                  tag: "Design",
+                },
+              ],
+            };
+
+            const projRes = await storage.saveFile(
+              repo,
+              ".gamejam/project.json",
+              initialProject,
+              null,
+              "Initialize Game Jam project details",
+            );
+            const boardRes = await storage.saveFile(repo, ".gamejam/board.json", initialBoard, null, "Initialize Game Jam board");
+
+            setProject(initialProject);
+            setBoard(initialBoard);
+            setShas({
+              project: projRes.content.sha,
+              board: boardRes.content.sha,
+            });
+            setIsDirty(false);
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const updateBoard = updater => {
+          setBoard(prev => {
+            const next = typeof updater === "function" ? updater(prev) : updater;
+            setIsDirty(true);
+            return next;
+          });
+        };
+
+        const saveChanges = async () => {
+          if (!isDirty || saving) return;
+          setSaving(true);
+          setError(null);
+          setConflict(false);
+          try {
+            const boardRes = await storage.saveFile(repo, ".gamejam/board.json", board, shas.board, "Update board state");
+            setShas(s => ({ ...s, board: boardRes.content.sha }));
+            setIsDirty(false);
+          } catch (err) {
+            if (err.message.includes("409") || err.message.includes("sha")) {
+              setConflict(true);
+            } else {
+              setError(err.message);
+            }
+          } finally {
+            setSaving(false);
+          }
+        };
+
+        return {
+          project,
+          board,
+          loading,
+          saving,
+          error,
+          isDirty,
+          conflict,
+          initWorkspace,
+          updateBoard,
+          saveChanges,
+          reload: loadWorkspace,
+        };
+      }
+
+      function SpeechInputButton({ onTranscript }) {
+        const [listening, setListening] = React.useState(false);
+        const [supported, setSupported] = React.useState(false);
+        const [error, setError] = React.useState(null);
+        const recognitionRef = React.useRef(null);
+
+        React.useEffect(() => {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (SpeechRecognition) {
+            setSupported(true);
+            const rec = new SpeechRecognition();
+            rec.continuous = false;
+            rec.interimResults = false;
+            rec.lang = "en-US";
+
+            rec.onresult = event => {
+              const text = event.results[0][0].transcript;
+              onTranscript(text);
+              setListening(false);
+            };
+
+            rec.onerror = evt => {
+              setError(evt.error || "Speech error");
+              setListening(false);
+            };
+
+            rec.onend = () => {
+              setListening(false);
+            };
+
+            recognitionRef.current = rec;
+          }
+        }, [onTranscript]);
+
+        const toggleListening = () => {
+          if (!supported || !recognitionRef.current) return;
+          setError(null);
+          if (listening) {
+            recognitionRef.current.stop();
+            setListening(false);
+          } else {
+            try {
+              recognitionRef.current.start();
+              setListening(true);
+            } catch (err) {
+              setError("Could not start microphone");
+            }
+          }
+        };
+
+        if (!supported) return null;
+
+        return (
+          <div style={{ display: "inline-block" }}>
+            <button
+              type="button"
+              className={`mic-button ${listening ? "listening" : ""}`}
+              onClick={toggleListening}
+              title={listening ? "Listening... click to stop" : "Speak text"}
+            >
+              🎤
+            </button>
+            {error && <div className="speech-error">{error}</div>}
+          </div>
+        );
+      }
+
+      function CardEditModal({ card, columns, collaborators, onSave, onDelete, onClose }) {
+        const [title, setTitle] = React.useState(card ? card.title : "");
+        const [description, setDescription] = React.useState(card ? card.description || "" : "");
+        const [status, setStatus] = React.useState(card ? card.status : columns[0]?.id || "backlog");
+        const [tag, setTag] = React.useState(card ? card.tag || "" : "");
+        const [assignee, setAssignee] = React.useState(card ? card.assignee || "" : "");
+
+        const handleSubmit = e => {
+          e.preventDefault();
+          if (!title.trim()) return;
+          onSave({
+            id: card ? card.id : `card-${Date.now()}`,
+            title: title.trim(),
+            description: description.trim(),
+            status,
+            tag: tag.trim(),
+            assignee,
+          });
+        };
+
+        return (
+          <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-panel" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="title" style={{ fontSize: "16px" }}>
+                  {card ? "Edit Card" : "New Card"}
+                </h2>
+                <button type="button" className="modal-close" onClick={onClose}>
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div className="field">
+                  <div className="field-header">
+                    <label>Title</label>
+                    <SpeechInputButton onTranscript={txt => setTitle(prev => (prev ? prev + " " + txt : txt))} />
+                  </div>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="Card title..."
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="field-header">
+                    <label>Description</label>
+                    <SpeechInputButton onTranscript={txt => setDescription(prev => (prev ? prev + " " + txt : txt))} />
+                  </div>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Add details, notes, links..."
+                  />
+                </div>
+
+                <div className="row-2">
+                  <div className="field">
+                    <label>Status Column</label>
+                    <select className="status-select" value={status} onChange={e => setStatus(e.target.value)}>
+                      {columns.map(col => (
+                        <option key={col.id} value={col.id}>
+                          {col.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label>Tag / Category</label>
+                    <input type="text" value={tag} onChange={e => setTag(e.target.value)} placeholder="e.g. Code, Art, Sound" />
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Assignee</label>
+                  <select className="status-select" value={assignee} onChange={e => setAssignee(e.target.value)}>
+                    <option value="">Unassigned</option>
+                    {collaborators.map(c => (
+                      <option key={c.login} value={c.login}>
+                        {c.login}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="modal-footer">
+                  {card ? (
+                    <button type="button" className="btn-danger-text" onClick={() => onDelete(card.id)}>
+                      Delete Card
+                    </button>
+                  ) : (
+                    <div></div>
+                  )}
+                  <button type="submit" className="btn-primary" disabled={!title.trim()}>
+                    {card ? "Save Changes" : "Create Card"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      function KanbanBoard({ workspace, collaborators }) {
+        const { board, updateBoard } = workspace;
+        const [editingCard, setEditingCard] = React.useState(null);
+        const [isCreating, setIsCreating] = React.useState(false);
+        const [targetColForNewCard, setTargetColForNewCard] = React.useState(null);
+        const [draggedCardId, setDraggedCardId] = React.useState(null);
+        const [dragOverColId, setDragOverColId] = React.useState(null);
+
+        if (!board) return null;
+
+        const handleSaveCard = cardData => {
+          updateBoard(prev => {
+            const exists = prev.cards.some(c => c.id === cardData.id);
+            const nextCards = exists ? prev.cards.map(c => (c.id === cardData.id ? cardData : c)) : [...prev.cards, cardData];
+            return { ...prev, cards: nextCards };
+          });
+          setEditingCard(null);
+          setIsCreating(false);
+        };
+
+        const handleDeleteCard = cardId => {
+          updateBoard(prev => ({
+            ...prev,
+            cards: prev.cards.filter(c => c.id !== cardId),
+          }));
+          setEditingCard(null);
+        };
+
+        const handleDragStart = (e, cardId) => {
+          e.dataTransfer.setData("text/plain", cardId);
+          e.dataTransfer.effectAllowed = "move";
+          setDraggedCardId(cardId);
+        };
+
+        const handleDragEnd = () => {
+          setDraggedCardId(null);
+          setDragOverColId(null);
+        };
+
+        const handleDragOver = (e, colId) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dragOverColId !== colId) {
+            setDragOverColId(colId);
+          }
+        };
+
+        const handleDragLeave = colId => {
+          if (dragOverColId === colId) {
+            setDragOverColId(null);
+          }
+        };
+
+        const handleDrop = (e, colId) => {
+          e.preventDefault();
+          const cardId = e.dataTransfer.getData("text/plain") || draggedCardId;
+          if (!cardId) return;
+
+          updateBoard(prev => ({
+            ...prev,
+            cards: prev.cards.map(c => (c.id === cardId ? { ...c, status: colId } : c)),
+          }));
+
+          setDraggedCardId(null);
+          setDragOverColId(null);
+        };
+
+        return (
+          <div>
+            <div className="board-topbar">
+              <div>
+                <h2 className="title" style={{ fontSize: "18px" }}>
+                  Task Board
+                </h2>
+                <p className="subtitle" style={{ margin: 0 }}>
+                  Drag cards between columns or click to edit.
+                </p>
+              </div>
+              <div className="board-topbar-actions">
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setTargetColForNewCard(board.columns[0]?.id || "backlog");
+                    setIsCreating(true);
+                  }}
+                >
+                  + Add Card
+                </button>
+              </div>
+            </div>
+
+            <div className="board-columns">
+              {board.columns.map(col => {
+                const colCards = board.cards.filter(c => c.status === col.id);
+                const isOver = dragOverColId === col.id;
+
+                return (
+                  <div
+                    key={col.id}
+                    className={`board-column ${isOver ? "drag-over" : ""}`}
+                    onDragOver={e => handleDragOver(e, col.id)}
+                    onDragLeave={() => handleDragLeave(col.id)}
+                    onDrop={e => handleDrop(e, col.id)}
+                  >
+                    <div className="board-column-header">
+                      <span>{col.title}</span>
+                      <span className="board-column-count">{colCards.length}</span>
+                    </div>
+
+                    <div className="board-column-cards">
+                      {colCards.map(card => {
+                        const isDragging = draggedCardId === card.id;
+                        return (
+                          <div
+                            key={card.id}
+                            draggable
+                            onDragStart={e => handleDragStart(e, card.id)}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => setEditingCard(card)}
+                            className={`board-card board-card--${card.status} ${isDragging ? "dragging" : ""}`}
+                          >
+                            {(card.tag || card.assignee) && (
+                              <div className="card-meta-row">
+                                {card.tag && <span className="tag-pill">{card.tag}</span>}
+                                {card.assignee && (
+                                  <div className="avatar-badge" title={`Assigned to ${card.assignee}`}>
+                                    {card.assignee.substring(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className="board-card-title">{card.title}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      style={{
+                        width: "100%",
+                        fontSize: "12px",
+                        padding: "6px",
+                        background: "transparent",
+                        borderStyle: "dashed",
+                      }}
+                      onClick={() => {
+                        setTargetColForNewCard(col.id);
+                        setIsCreating(true);
+                      }}
+                    >
+                      + Add Card
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {(editingCard || isCreating) && (
+              <CardEditModal
+                card={editingCard}
+                columns={board.columns}
+                collaborators={collaborators}
+                onSave={handleSaveCard}
+                onDelete={handleDeleteCard}
+                onClose={() => {
+                  setEditingCard(null);
+                  setIsCreating(false);
+                }}
+              />
+            )}
+          </div>
+        );
+      }
+
+      function ProjectDashboard({ workspace, commits, collaborators }) {
+        const { project, board } = workspace;
+        if (!project || !board) return null;
+
+        const totalCards = board.cards.length;
+        const doneCards = board.cards.filter(c => c.status === "done").length;
+        const inProgressCards = board.cards.filter(c => c.status === "in-progress").length;
+        const percent = totalCards === 0 ? 0 : Math.round((doneCards / totalCards) * 100);
+
+        return (
+          <div>
+            <div className="dashboard-grid">
+              <div className="dashboard-stat">
+                <div className="stat-value">{percent}%</div>
+                <div className="stat-label">Progress Done</div>
+              </div>
+              <div className="dashboard-stat">
+                <div className="stat-value">{totalCards}</div>
+                <div className="stat-label">Total Tasks</div>
+              </div>
+              <div className="dashboard-stat">
+                <div className="stat-value">{inProgressCards}</div>
+                <div className="stat-label">In Progress</div>
+              </div>
+              <div className="dashboard-stat">
+                <div className="stat-value">{collaborators.length}</div>
+                <div className="stat-label">Team Members</div>
+              </div>
+            </div>
+
+            <div className="dashboard-columns">
+              <div className="dashboard-panel">
+                <h3>Recent Activity</h3>
+                {commits.length === 0 ? (
+                  <p className="empty-state">No recent activity found.</p>
+                ) : (
+                  <ul className="activity-list">
+                    {commits.map(c => (
+                      <li key={c.sha} className="activity-item">
+                        <div className="activity-msg">{c.commit.message}</div>
+                        <div className="activity-meta">
+                          {c.commit.author.name} • {new Date(c.commit.author.date).toLocaleString()}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="dashboard-panel">
+                <h3>Project Information</h3>
+                <div style={{ fontSize: "13px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Jam: </span>
+                    <span>{project.jam || "Not set"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Theme: </span>
+                    <span>{project.theme || "Not set"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Description: </span>
+                    <span>{project.description || "No description provided."}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function TeamTab({ collaborators, repo }) {
+        return (
+          <div>
+            <div style={{ marginBottom: "20px" }}>
+              <h2 className="title" style={{ fontSize: "18px" }}>
+                Team Collaborators
+              </h2>
+              <p className="subtitle" style={{ margin: 0 }}>
+                People with access to the <code>{repo.full_name}</code> repository.
+              </p>
+            </div>
+
+            {collaborators.length === 0 ? (
+              <p className="empty-state">No collaborators found or loading permissions...</p>
+            ) : (
+              <div className="team-grid">
+                {collaborators.map(c => {
+                  const perm = c.permissions ? (c.permissions.admin ? "Admin" : c.permissions.push ? "Write" : "Read") : "Member";
+                  return (
+                    <div key={c.login} className="team-card">
+                      <img src={c.avatar_url} alt={c.login} />
+                      <div>
+                        <div className="team-card-name">{c.login}</div>
+                        <div className="team-card-perm">{perm} Access</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function InitWizard({ storage, repo, onInit }) {
+        const [name, setName] = React.useState(repo.name);
+        const [description, setDescription] = React.useState("");
+        const [jam, setJam] = React.useState("");
+        const [theme, setTheme] = React.useState("");
+        const [submitting, setSubmitting] = React.useState(false);
+
+        const handleSubmit = async e => {
+          e.preventDefault();
+          setSubmitting(true);
+          await onInit({ name, description, jam, theme });
+          setSubmitting(false);
+        };
+
+        return (
+          <div className="card">
+            <h1 className="title">Initialize Game Jam Planner</h1>
+            <p className="subtitle">
+              Repository <code>{repo.full_name}</code> doesn't have a planner setup yet.
+            </p>
+
+            <form onSubmit={handleSubmit}>
+              <div className="field">
+                <label>Game Title</label>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} required />
+              </div>
+              <div className="field">
+                <label>Game Jam Name</label>
+                <input type="text" value={jam} onChange={e => setJam(e.target.value)} placeholder="e.g. Ludum Dare 55" />
+              </div>
+              <div className="field">
+                <label>Jam Theme</label>
+                <input type="text" value={theme} onChange={e => setTheme(e.target.value)} placeholder="e.g. Summoning" />
+              </div>
+              <div className="field">
+                <label>Short Pitch / Description</label>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="What is your game concept?"
+                />
+              </div>
+
+              <button type="submit" className="btn-primary" disabled={submitting}>
+                {submitting ? "Initializing .gamejam/ ..." : "Initialize Planner"}
+              </button>
+            </form>
+          </div>
+        );
+      }
+
+      function ProjectShell({ repo, storage, onBack }) {
+        const workspace = useWorkspace(storage, repo);
+        const [activeTab, setActiveTab] = React.useState("board"); // 'dashboard' | 'board' | 'team'
+        const [commits, setCommits] = React.useState([]);
+        const [collaborators, setCollaborators] = React.useState([]);
+
+        React.useEffect(() => {
+          if (workspace.project) {
+            storage.listCommits(repo).then(setCommits).catch(console.error);
+            storage.listCollaborators(repo).then(setCollaborators).catch(console.error);
+          }
+        }, [workspace.project, repo, storage]);
+
+        if (workspace.loading) {
+          return (
+            <div className="card">
+              <div className="status-line">
+                <div className="spinner"></div>
+                <span>Loading workspace from GitHub...</span>
+              </div>
+            </div>
+          );
+        }
+
+        if (!workspace.project) {
+          return <InitWizard storage={storage} repo={repo} onInit={workspace.initWorkspace} />;
+        }
+
+        return (
+          <div className="app-workspace">
+            <div className="breadcrumb">
+              <button onClick={onBack}>&larr; Switch Repo</button>
+              <span>/</span>
+              <strong style={{ color: "var(--text)" }}>{workspace.project.name}</strong>
+              <span style={{ fontSize: "11px", color: "var(--text-dim)", marginLeft: "auto" }}>{repo.full_name}</span>
+            </div>
+
+            {workspace.error && <div className="error-box">{workspace.error}</div>}
+
+            {workspace.conflict && (
+              <div className="error-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Conflict detected! Remote changes exist. Reload to get latest state.</span>
+                <button onClick={workspace.reload} style={{ fontSize: "12px", padding: "4px 8px" }}>
+                  Reload Workspace
+                </button>
+              </div>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div className="view-tabs" style={{ marginBottom: 0, borderBottom: "none" }}>
+                <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => setActiveTab("dashboard")}>
+                  Dashboard
+                </button>
+                <button className={activeTab === "board" ? "active" : ""} onClick={() => setActiveTab("board")}>
+                  Board
+                </button>
+                <button className={activeTab === "team" ? "active" : ""} onClick={() => setActiveTab("team")}>
+                  Team
+                </button>
+              </div>
+
+              <div>
+                <button
+                  className="btn-primary"
+                  style={{ width: "auto", padding: "8px 16px" }}
+                  disabled={!workspace.isDirty || workspace.saving}
+                  onClick={workspace.saveChanges}
+                >
+                  {workspace.saving ? "Saving..." : workspace.isDirty ? "Save Changes" : "Saved"}
+                </button>
+              </div>
+            </div>
+
+            {activeTab === "dashboard" && <ProjectDashboard workspace={workspace} commits={commits} collaborators={collaborators} />}
+            {activeTab === "board" && <KanbanBoard workspace={workspace} collaborators={collaborators} />}
+            {activeTab === "team" && <TeamTab collaborators={collaborators} repo={repo} />}
+          </div>
+        );
+      }
+
+      function ProjectGate({ repo, storage, onBack }) {
+        return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
+      }
+
+      function App() {
+        const auth = React.useMemo(() => new GitHubAuth(CONFIG), []);
+        const [selectedRepo, setSelectedRepo] = React.useState(null);
+
+        return (
+          <GitHubAuthGate auth={auth}>
+            {user => {
+              const storage = new GitHubStorage(user.accessToken);
+
+              if (!selectedRepo) {
+                return (
+                  <RepoPicker
+                    storage={storage}
+                    onLogout={() => auth.logout()}
+                    onSelectRepo={repo =>
+                      setSelectedRepo({
+                        owner: repo.owner.login,
+                        name: repo.name,
+                        full_name: repo.full_name,
+                      })
+                    }
+                  />
+                );
+              }
+
+              return <ProjectGate repo={selectedRepo} storage={storage} onBack={() => setSelectedRepo(null)} />;
+            }}
+          </GitHubAuthGate>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+
+    <script>
+      const source = document.getElementById("app-source").textContent;
+      const { code } = Babel.transform(source, {
+        presets: [["react", { runtime: "classic" }]],
+      });
+      const script = document.createElement("script");
+      script.textContent = code;
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
