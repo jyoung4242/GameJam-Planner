@@ -116,18 +116,6 @@
       .sync-status.pulling {
         color: var(--accent);
       }
-      .install-app-box {
-        border: 1px dashed var(--panel-border);
-        border-radius: 8px;
-        padding: 20px;
-        text-align: center;
-        margin-bottom: 8px;
-      }
-      .install-app-box p {
-        color: var(--text-dim);
-        font-size: 13px;
-        margin: 8px 0 16px;
-      }
       .status-line {
         display: flex;
         align-items: center;
@@ -740,31 +728,24 @@
       // =====================================================================
       // CONFIG
       // =====================================================================
-      // Fill these in once you've registered a GitHub App (Settings >
-      // Developer settings > GitHub Apps) with Device Flow enabled under
-      // "Optional Features". CLIENT_ID is public and safe to ship in this
-      // file — GitHub Apps never require a client secret for Device Flow.
+      // Fill these in once you've registered a classic GitHub OAuth App with
+      // Device Flow enabled (Settings > Developer settings > OAuth Apps >
+      // your app > Enable Device Flow). CLIENT_ID is public and safe to ship
+      // in this file.
       //
-      // GitHub Apps don't use OAuth-style scopes: the repository permissions
-      // this app can use (Contents, Issues) are fixed on the App's own
-      // settings page, and the *repositories* it can reach are fixed by
-      // which repos each user chooses when they install the app — not by
-      // anything requested at login time. That's what makes this
-      // repo-scoped rather than "every repo the account can see."
+      // RELAY_BASE_URL points at a tiny stateless CORS relay, because GitHub's
+      // /login/device/code and /login/oauth/access_token endpoints don't send
+      // CORS headers, so a browser can't call them directly. The relay just
+      // forwards the POST and adds `Access-Control-Allow-Origin: *` — it never
+      // sees a client secret, since Device Flow doesn't use one.
       //
-      // appSlug is the App's public URL slug (github.com/apps/<appSlug>),
-      // used to link users to the installation page.
-      //
-      // RELAY_BASE_URL points at a tiny stateless CORS relay, because
-      // GitHub's /login/device/code and /login/oauth/access_token endpoints
-      // don't send CORS headers, so a browser can't call them directly. The
-      // relay just forwards the POST and adds `Access-Control-Allow-Origin:
-      // *` — it never sees a client secret, since neither the device flow
-      // nor refreshing a device-flow-issued token requires one.
+      // scopes: OAuth Apps (unlike GitHub Apps) DO use scopes, requested here
+      // at login time. "repo" grants read/write on private + public repos,
+      // which is what the Contents API calls need for .gamejam/*.json.
       const CONFIG = {
-        clientId: "Iv23lijW75Uw61RKbn2I",
-        appSlug: "gamejamplanner",
+        clientId: "Ov23liy7kjuppgIY5yU1",
         relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
+        scopes: ["repo"],
       };
 
       // =====================================================================
@@ -787,30 +768,17 @@
         Unknown: "unknown",
       };
 
-      // AuthenticatedUser shape: { login, name, avatarUrl, accessToken,
-      //   expiresAt, refreshToken, refreshTokenExpiresAt }
-      // expiresAt/refreshTokenExpiresAt are epoch-ms timestamps, or null if
-      // this App has "user-to-server token expiration" turned off (in which
-      // case accessToken behaves like the old OAuth token: doesn't expire).
+      // AuthenticatedUser shape: { login, name, avatarUrl, accessToken }
 
       // =====================================================================
-      // AUTH: GitHub App user identity, via Device Flow through the CORS
-      // relay. This authenticates *who's using the app*; it does not grant
-      // repo access by itself — that comes from the separate installation
-      // step (see GitHubStorage.listAccessibleRepositories), which is what
-      // actually scopes API calls down to the repos the user installed the
-      // app on. Device Flow was kept here to preserve the existing
-      // code-entry UX with a minimal diff; see the migration notes for why a
-      // browser SPA is a slight mismatch for it and what GitHub recommends
-      // instead.
+      // AUTH: GitHub Device Flow, via plain fetch through the CORS relay
       // =====================================================================
       const SESSION_KEY = "gamejam-planner:github-session";
 
-      class GitHubAppAuth {
+      class GitHubDeviceFlowAuth {
         state = { status: AuthStatus.SignedOut };
         listeners = new Set();
         pollAbort = null;
-        refreshTimer = null;
 
         onStateChange(listener) {
           this.listeners.add(listener);
@@ -826,21 +794,10 @@
           const raw = sessionStorage.getItem(SESSION_KEY);
           if (!raw) return null;
           try {
-            let user = JSON.parse(raw);
-
-            // 60s buffer so a token doesn't expire mid-request right after
-            // "restoring" it as still-valid.
-            const isExpired = user.expiresAt && Date.now() > user.expiresAt - 60 * 1000;
-            if (isExpired) {
-              if (!user.refreshToken) { sessionStorage.removeItem(SESSION_KEY); return null; }
-              user = await this.refreshAccessToken(user);
-            } else {
-              const ok = await this.verifyToken(user.accessToken);
-              if (!ok) { sessionStorage.removeItem(SESSION_KEY); return null; }
-            }
-
+            const user = JSON.parse(raw);
+            const ok = await this.verifyToken(user.accessToken);
+            if (!ok) { sessionStorage.removeItem(SESSION_KEY); return null; }
             this.setState({ status: AuthStatus.SignedIn, user });
-            this.scheduleProactiveRefresh(user);
             return user;
           } catch {
             sessionStorage.removeItem(SESSION_KEY);
@@ -863,14 +820,12 @@
               expiresInSeconds: deviceCode.expires_in,
             });
 
-            const tokenPayload = await this.pollForToken(deviceCode, this.pollAbort.signal);
+            const accessToken = await this.pollForToken(deviceCode, this.pollAbort.signal);
             this.setState({ status: AuthStatus.Polling });
 
-            const profile = await this.fetchAuthenticatedUser(tokenPayload.access_token);
-            const user = { ...profile, ...this.tokenFields(tokenPayload) };
-            this.persistSession(user);
+            const user = await this.fetchAuthenticatedUser(accessToken);
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
             this.setState({ status: AuthStatus.SignedIn, user });
-            this.scheduleProactiveRefresh(user);
             return user;
           } catch (err) {
             this.setState({ status: AuthStatus.Error, error: this.toAuthError(err) });
@@ -880,7 +835,6 @@
 
         logout() {
           this.pollAbort?.abort();
-          this.clearProactiveRefresh();
           sessionStorage.removeItem(SESSION_KEY);
           this.setState({ status: AuthStatus.SignedOut });
         }
@@ -889,7 +843,7 @@
           const res = await fetch(`${CONFIG.relayBaseUrl}/login/device/code`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ client_id: CONFIG.clientId }),
+            body: JSON.stringify({ client_id: CONFIG.clientId, scope: CONFIG.scopes.join(" ") }),
           });
           if (!res.ok) throw new Error(`relay:Device code request failed (${res.status})`);
           return res.json();
@@ -915,10 +869,7 @@
             if (!res.ok) throw new Error(`relay:Token poll failed (${res.status})`);
             const body = await res.json();
 
-            // Full payload (not just the token string) — GitHub Apps also
-            // return refresh_token/expires_in here when the App has opted
-            // into expiring user tokens.
-            if (body.access_token) return body;
+            if (body.access_token) return body.access_token;
 
             switch (body.error) {
               case "authorization_pending": continue;
@@ -931,82 +882,13 @@
           throw new Error("expired:Device code expired");
         }
 
-        /**
-         * Exchanges a refresh token for a new user access token. Unlike the
-         * web application flow, tokens minted via Device Flow never need a
-         * client secret to refresh — safe to call straight from the browser
-         * through the same CORS relay used for login.
-         */
-        async refreshAccessToken(user) {
-          if (!user.refreshToken) throw new Error("No refresh token available");
-          const res = await fetch(`${CONFIG.relayBaseUrl}/login/oauth/access_token`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({
-              client_id: CONFIG.clientId,
-              grant_type: "refresh_token",
-              refresh_token: user.refreshToken,
-            }),
-          });
-          if (!res.ok) throw new Error(`relay:Token refresh failed (${res.status})`);
-          const body = await res.json();
-          if (body.error) throw new Error(`relay:${body.error_description || body.error}`);
-
-          const updated = { ...user, ...this.tokenFields(body) };
-          this.persistSession(updated);
-          return updated;
-        }
-
-        tokenFields(body) {
-          return {
-            accessToken: body.access_token,
-            expiresAt: body.expires_in ? Date.now() + body.expires_in * 1000 : null,
-            refreshToken: body.refresh_token || null,
-            refreshTokenExpiresAt: body.refresh_token_expires_in ? Date.now() + body.refresh_token_expires_in * 1000 : null,
-          };
-        }
-
-        persistSession(user) {
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-        }
-
-        /**
-         * If this App has expiring tokens enabled, silently refresh a few
-         * minutes ahead of expiry so a long-running tab doesn't hit a 401
-         * mid-save. No-ops for Apps that opted out of token expiration
-         * (accessToken then behaves like the old non-expiring OAuth token).
-         */
-        scheduleProactiveRefresh(user) {
-          this.clearProactiveRefresh();
-          if (!user.expiresAt || !user.refreshToken) return;
-          const delay = Math.max(user.expiresAt - Date.now() - 5 * 60 * 1000, 0);
-          this.refreshTimer = setTimeout(() => {
-            this.refreshAccessToken(user)
-              .then((updated) => {
-                this.setState({ status: AuthStatus.SignedIn, user: updated });
-                this.scheduleProactiveRefresh(updated);
-              })
-              .catch(() => {
-                // Refresh token itself expired (default lifetime: 6 months)
-                // or was revoked — surface as a normal sign-out rather than
-                // an error toast; the user just logs in again.
-                this.logout();
-              });
-          }, delay);
-        }
-
-        clearProactiveRefresh() {
-          if (this.refreshTimer) clearTimeout(this.refreshTimer);
-          this.refreshTimer = null;
-        }
-
         async fetchAuthenticatedUser(accessToken) {
           const res = await fetch("https://api.github.com/user", {
             headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/vnd.github+json" },
           });
           if (!res.ok) throw new Error(`relay:Failed to fetch user profile (${res.status})`);
           const body = await res.json();
-          return { login: body.login, name: body.name || null, avatarUrl: body.avatar_url };
+          return { login: body.login, name: body.name || null, avatarUrl: body.avatar_url, accessToken };
         }
 
         async verifyToken(accessToken) {
@@ -1063,63 +945,27 @@
         kind = StorageProviderKind.GitHub;
         constructor(accessToken) { this.accessToken = accessToken; }
 
-        /** Rotates the token in place so a silent auth refresh doesn't require recreating this instance (and re-triggering effects keyed on its identity). */
-        setToken(accessToken) { this.accessToken = accessToken; }
-
         authHeaders(extra = {}) {
           return { Authorization: `Bearer ${this.accessToken}`, Accept: "application/vnd.github+json", ...extra };
         }
 
-        /**
-         * Repos this GitHub App installation is scoped to — this is what
-         * makes access repo-scoped instead of "every repo the account can
-         * see" (the old OAuth `repo` scope's behavior). Aggregates across
-         * every installation the signed-in user has access to, since a user
-         * can install the same App separately on their personal account and
-         * on any orgs they belong to.
-         */
-        async listAccessibleRepositories() {
-          const installations = await this.listInstallations();
-          const byFullName = new Map();
-          for (const installation of installations) {
-            const repos = await this.listInstallationRepositories(installation.id);
-            for (const repo of repos) byFullName.set(repo.full_name, repo);
-          }
-          return Array.from(byFullName.values());
-        }
-
-        async listInstallations() {
-          const res = await fetch("https://api.github.com/user/installations?per_page=100", { headers: this.authHeaders() });
-          if (!res.ok) throw new Error(`Failed to list app installations (${res.status})`);
-          const body = await res.json();
-          return body.installations || [];
-        }
-
-        async listInstallationRepositories(installationId) {
+        async listUserRepos() {
+          // Classic OAuth App with "repo" scope: this single call returns
+          // every repo the user can access (owned + collaborator), no
+          // separate install step needed.
           const res = await fetch(
-            `https://api.github.com/user/installations/${installationId}/repositories?per_page=100`,
+            "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator",
             { headers: this.authHeaders() },
           );
-          if (!res.ok) throw new Error(`Failed to list repositories for installation ${installationId} (${res.status})`);
-          const body = await res.json();
-          return body.repositories || [];
+          if (!res.ok) throw new Error(`Failed to list repositories (${res.status})`);
+          return res.json();
         }
 
         async listCollaborators(repo) {
           // Repo access list (admin/write/read), not commit-history
           // "contributors" — this matches who's actually on the jam team per
           // planning.md's Authorization section, including people who haven't
-          // committed yet.
-          //
-          // GitHub App permission note: this endpoint needs "Metadata: Read"
-          // (granted automatically) for personal-account repos. For
-          // org-owned repos, GitHub also requires the App to hold the
-          // *organization*-level "Members: Read" permission — see the
-          // migration notes for why that's left out of this App's default
-          // permission set (it doesn't fit the repo-scoped install model).
-          // Callers already treat a failure here as "no roster available"
-          // rather than a hard error, so this degrades gracefully on repos
-          // where it 403s.
+          // committed yet. Requires push access to the repo to call.
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
             { headers: this.authHeaders() },
@@ -1130,9 +976,8 @@
         }
 
         async listCollaboratorsWithPermissions(repo) {
-          // Same endpoint and same GitHub App permission caveat as
-          // listCollaborators above, but keeps the permission level and
-          // avatar for the Team page instead of flattening to just logins.
+          // Same endpoint as listCollaborators, but keeps the permission level
+          // and avatar for the Team page instead of flattening to just logins.
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
             { headers: this.authHeaders() },
@@ -1791,40 +1636,15 @@
         );
       }
 
-      const GITHUB_APP_INSTALL_URL = `https://github.com/apps/${CONFIG.appSlug}/installations/new`;
-
       function RepoList({ user, storage, onSelectRepo, onLogout }) {
         const [repos, setRepos] = useState(null);
         const [error, setError] = useState(null);
-        const [awaitingInstall, setAwaitingInstall] = useState(false);
-        const pollTimerRef = useRef(null);
 
-        const load = useCallback(() => {
-          setError(null);
-          return storage.listAccessibleRepositories()
-            .then((data) => { setRepos(data); return data; })
-            .catch((err) => { setError(err.message); return null; });
-        }, [storage]);
-
-        useEffect(() => { load(); }, [load]);
-
-        // While waiting for the user to finish installing in the other tab,
-        // poll for the installation to show up — mirrors the "waiting for
-        // you to approve access" pattern used during device-flow login,
-        // since a static SPA has no redirect callback to react to instead.
         useEffect(() => {
-          if (!awaitingInstall) return;
-          pollTimerRef.current = setInterval(async () => {
-            const data = await load();
-            if (data && data.length > 0) setAwaitingInstall(false);
-          }, 3000);
-          return () => clearInterval(pollTimerRef.current);
-        }, [awaitingInstall, load]);
-
-        const handleInstallClick = () => {
-          window.open(GITHUB_APP_INSTALL_URL, "_blank", "noopener,noreferrer");
-          setAwaitingInstall(true);
-        };
+          storage.listUserRepos()
+            .then((data) => setRepos(data))
+            .catch((err) => setError(err.message));
+        }, [storage]);
 
         return (
           <div className="card">
@@ -1845,37 +1665,21 @@
             {!repos && !error && <div className="status-line"><Spinner /> Loading repositories…</div>}
 
             {repos && repos.length === 0 && (
-              <div className="install-app-box">
-                <p>
-                  No repositories yet — install the GitHub App on the repo you want to plan in.
-                  You pick exactly which repositories it can see during install.
-                </p>
-                <button className="btn-primary" onClick={handleInstallClick}>Install GitHub App on a repository</button>
-                {awaitingInstall && (
-                  <div className="status-line" style={{ justifyContent: "center", marginTop: 12 }}>
-                    <Spinner /> Waiting for the installation to complete…
-                  </div>
-                )}
-              </div>
+              <div className="empty-state">No repositories found for this account.</div>
             )}
 
             {repos && repos.length > 0 && (
-              <div>
-                <ul className="repo-list">
-                  {repos.map((repo) => (
-                    <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
-                      <div>
-                        <div className="repo-name">{repo.full_name}</div>
-                        <div className="repo-meta">{repo.private ? "Private" : "Public"} · updated {new Date(repo.updated_at).toLocaleDateString()}</div>
-                      </div>
-                      <span className="badge">{repo.permissions && repo.permissions.admin ? "admin" : repo.permissions && repo.permissions.push ? "write" : "read"}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button className="link-btn" style={{ marginLeft: 0 }} onClick={handleInstallClick}>
-                  + Add another repository
-                </button>
-              </div>
+              <ul className="repo-list">
+                {repos.map((repo) => (
+                  <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
+                    <div>
+                      <div className="repo-name">{repo.full_name}</div>
+                      <div className="repo-meta">{repo.private ? "Private" : "Public"} · updated {new Date(repo.updated_at).toLocaleDateString()}</div>
+                    </div>
+                    <span className="badge">{repo.permissions && repo.permissions.admin ? "admin" : repo.permissions && repo.permissions.push ? "write" : "read"}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         );
@@ -2546,10 +2350,8 @@
 
       function App() {
         const authRef = useRef(null);
-        if (!authRef.current) authRef.current = new GitHubAppAuth();
+        if (!authRef.current) authRef.current = new GitHubDeviceFlowAuth();
         const auth = authRef.current;
-
-        const storageRef = useRef(null);
 
         const [user, setUser] = useState(null);
         const [restoring, setRestoring] = useState(true);
@@ -2559,22 +2361,7 @@
           auth.restoreSession().then((u) => { setUser(u); setRestoring(false); });
         }, []);
 
-        // Keeps `user` (and via it, the stored token) in sync with silent
-        // background refreshes, not just the initial sign-in. LoginScreen
-        // has its own subscription for rendering the login UI itself.
-        useEffect(() => {
-          return auth.onStateChange((state) => {
-            if (state.status === AuthStatus.SignedIn) setUser(state.user);
-            if (state.status === AuthStatus.SignedOut) setUser(null);
-          });
-        }, [auth]);
-
-        const handleLogout = useCallback(() => {
-          auth.logout();
-          storageRef.current = null;
-          setUser(null);
-          setSelectedRepo(null);
-        }, [auth]);
+        const handleLogout = useCallback(() => { auth.logout(); setUser(null); setSelectedRepo(null); }, [auth]);
 
         if (restoring) {
           return <div className="card"><div className="status-line"><Spinner /> Checking for an existing session…</div></div>;
@@ -2584,14 +2371,7 @@
           return <LoginScreen auth={auth} onSignedIn={setUser} />;
         }
 
-        // A single long-lived GitHubStorage instance for the session — its
-        // token is rotated in place (see setToken) rather than replacing the
-        // instance, so components keying effects off `storage`'s identity
-        // (useWorkspace, RepoList) don't reload every time a background
-        // token refresh happens.
-        if (!storageRef.current) storageRef.current = new GitHubStorage(user.accessToken);
-        else storageRef.current.setToken(user.accessToken);
-        const storage = storageRef.current;
+        const storage = new GitHubStorage(user.accessToken);
 
         if (!selectedRepo) {
           return (
