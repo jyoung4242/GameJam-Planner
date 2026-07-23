@@ -299,6 +299,7 @@
         flex: 0 0 260px;
         display: flex;
         flex-direction: column;
+        max-height: max(320px, calc(100vh - 220px));
       }
       .board-column-header {
         display: flex;
@@ -323,6 +324,22 @@
         gap: 8px;
         min-height: 24px;
         margin-bottom: 10px;
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .board-column-cards::-webkit-scrollbar {
+        width: 6px;
+      }
+      .board-column-cards::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .board-column-cards::-webkit-scrollbar-thumb {
+        background: var(--panel-border);
+        border-radius: 999px;
+      }
+      .board-column-cards::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-dim);
       }
       .board-card {
         background: #0f1115;
