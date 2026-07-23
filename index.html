@@ -633,6 +633,72 @@
         readManifest(repo) { return this.getFile(repo, "project.json"); }
         readBoard(repo) { return this.getFile(repo, "board.json"); }
 
+        async listCardIds(repo) {
+          const res = await fetch(
+            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/cards`,
+            { headers: this.authHeaders() },
+          );
+          if (res.status === 404) return []; // cards/ doesn't exist yet — no cards written
+          if (!res.ok) throw new Error(`Failed to list cards (${res.status})`);
+          const entries = await res.json();
+          return (Array.isArray(entries) ? entries : [])
+            .filter((e) => e.type === "file" && e.name.endsWith(".json"))
+            .map((e) => e.name.replace(/\.json$/, ""));
+        }
+
+        readCard(repo, cardId) {
+          return this.getFile(repo, `cards/${cardId}.json`);
+        }
+
+        writeCard(repo, cardId, data, handle) {
+          return this.putFile(repo, `cards/${cardId}.json`, data, handle, `Update card: ${data.title}`);
+        }
+
+        async deleteCard(repo, cardId, handle) {
+          const res = await fetch(
+            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/cards/${cardId}.json`,
+            {
+              method: "DELETE",
+              headers: this.authHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ message: `Remove card: ${cardId}`, sha: handle.revision }),
+            },
+          );
+          if (!res.ok) throw new Error(`Failed to delete card ${cardId} (${res.status})`);
+        }
+
+        /**
+         * Writes each dirty file independently rather than as a single atomic
+         * git tree/commit. Matches "one file per card, few conflicts" from
+         * planning.md — a true atomic multi-file commit (git trees API) is a
+         * reasonable upgrade later if autosave batches get large.
+         */
+        async commitBatch(repo, message, writes) {
+          const succeeded = [];
+          const conflicts = [];
+
+          for (const write of writes) {
+            try {
+              let handle;
+              if (write.file === "board") {
+                handle = await this.putFile(repo, "board.json", write.data, write.handle, message);
+              } else if (write.file === "card") {
+                handle = await this.writeCard(repo, write.cardId, write.data, write.handle);
+              } else {
+                continue;
+              }
+              succeeded.push(handle);
+            } catch (err) {
+              if (err instanceof StorageConflictError) {
+                conflicts.push(err);
+              } else {
+                throw err;
+              }
+            }
+          }
+
+          return { succeeded, conflicts };
+        }
+
         async getFile(repo, relativePath) {
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relativePath}`,
@@ -877,8 +943,8 @@
           loading,
           error,
           workspace,
-          project: loading ? null : workspace.project,
-          dirty: !loading && workspace.dirtyPaths().length > 0,
+          project: (loading || error) ? null : workspace.project,
+          dirty: !loading && !error && workspace.dirtyPaths().length > 0,
           saving: workspace.saving,
           conflicts: workspace.conflicts,
         };
