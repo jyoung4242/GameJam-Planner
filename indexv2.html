@@ -78,14 +78,7 @@
       .btn-primary:hover {
         filter: brightness(1.05);
       }
-      .device-code-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin: 20px 0;
-      }
       .device-code {
-        flex: 1;
         font-size: 32px;
         letter-spacing: 4px;
         font-weight: 700;
@@ -94,26 +87,7 @@
         border: 1px dashed var(--panel-border);
         border-radius: 8px;
         padding: 16px;
-        color: var(--accent);
-      }
-      .copy-code-btn {
-        align-self: stretch;
-        padding: 0 14px;
-        font-size: 13px;
-        white-space: nowrap;
-      }
-      .copy-code-btn.copied {
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-      .sync-status {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--text-dim);
-        font-size: 12px;
-      }
-      .sync-status.pulling {
+        margin: 20px 0;
         color: var(--accent);
       }
       .status-line {
@@ -1101,58 +1075,6 @@
           return { succeeded, conflicts };
         }
 
-        /**
-         * Notifies a card's assignee via a real GitHub notification: a repo
-         * issue @mentioning them, since Contents-API JSON files can't trigger
-         * GitHub's notification system on their own. One tracking issue per
-         * card, reused across re-assignments (number cached on the card as
-         * `trackingIssueNumber`) so re-assigning doesn't spawn duplicate issues.
-         */
-        async notifyAssignee(repo, card, assignee) {
-          const title = `[Card] ${card.title}`;
-          const body = [
-            `@${assignee} — you've been assigned to **${card.title}** on the game jam board.`,
-            "",
-            `Status: ${statusLabel(card.status)}`,
-            card.description ? `\n${card.description}` : null,
-          ].filter((line) => line !== null).join("\n");
-
-          if (card.trackingIssueNumber) {
-            const res = await fetch(
-              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${card.trackingIssueNumber}/comments`,
-              {
-                method: "POST",
-                headers: this.authHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({ body }),
-              },
-            );
-            if (!res.ok) throw new Error(`Failed to notify assignee (${res.status})`);
-
-            // Best-effort: also update GitHub's native assignee so it shows
-            // up in the repo's issue list, not just as a comment. Not fatal
-            // if this fails (e.g. assignee lacks issue-assign permission).
-            await fetch(
-              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${card.trackingIssueNumber}`,
-              {
-                method: "PATCH",
-                headers: this.authHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({ assignees: [assignee] }),
-              },
-            ).catch(() => {});
-
-            return card.trackingIssueNumber;
-          }
-
-          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/issues`, {
-            method: "POST",
-            headers: this.authHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ title, body, assignees: [assignee] }),
-          });
-          if (!res.ok) throw new Error(`Failed to create tracking issue (${res.status})`);
-          const issue = await res.json();
-          return issue.number;
-        }
-
         async getFile(repo, relativePath) {
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relativePath}`,
@@ -1208,12 +1130,6 @@
           this.saving = false;
           this.conflicts = [];
           this.autosaveTimer = null;
-
-          this.pulling = false;
-          this.pullTimer = null;
-          this.lastPulledAt = null;
-          this.pullError = null;
-          this.notifyError = null;
         }
 
         onChange(listener) {
@@ -1380,125 +1296,6 @@
           if (this.autosaveTimer) clearInterval(this.autosaveTimer);
           this.autosaveTimer = null;
         }
-
-        /**
-         * Periodic resync per planning.md's Sync section: pull latest, merge
-         * automatically wherever nothing local is dirty, and only surface a
-         * conflict (via the existing `conflicts` array + Reload button) when
-         * a file changed on GitHub *and* has unsaved local edits. Runs
-         * silently in the background — network errors are stored rather than
-         * thrown, so a flaky connection doesn't interrupt editing.
-         */
-        async pull() {
-          if (this.pulling || this.saving || !this.manifest) return;
-          this.pulling = true;
-          this.pullError = null;
-          this.emit();
-
-          try {
-            const [manifestResult, boardResult, cardIds] = await Promise.all([
-              this.storage.readManifest(this.repo),
-              this.storage.readBoard(this.repo),
-              this.storage.listCardIds(this.repo),
-            ]);
-
-            // Manifest (name/theme/etc.) isn't locally editable yet, so it's
-            // always safe to take the latest.
-            this.manifest = { data: manifestResult.data, handle: manifestResult.handle };
-
-            if (this.board.dirty) {
-              if (boardResult.handle.revision !== this.board.handle?.revision) {
-                this._flagConflict("board.json");
-              }
-            } else if (boardResult.handle.revision !== this.board.handle?.revision) {
-              this.board = { data: boardResult.data, handle: boardResult.handle, dirty: false };
-            }
-
-            const remoteIds = new Set(cardIds);
-            const remoteCards = await Promise.all(
-              cardIds.map((id) => this.storage.readCard(this.repo, id).catch(() => null)),
-            );
-
-            for (const result of remoteCards) {
-              if (!result) continue;
-              const id = result.data.id;
-              const tracked = this.cards.get(id);
-
-              if (!tracked) {
-                // New card someone else pushed since this loaded.
-                this.cards.set(id, { data: result.data, handle: result.handle, dirty: false, deleted: false });
-                continue;
-              }
-
-              if (tracked.dirty || tracked.deleted) {
-                if (result.handle.revision !== tracked.handle?.revision) {
-                  this._flagConflict(`cards/${id}.json`);
-                }
-                continue;
-              }
-
-              if (result.handle.revision !== tracked.handle?.revision) {
-                this.cards.set(id, { data: result.data, handle: result.handle, dirty: false, deleted: false });
-              }
-            }
-
-            // Cards removed remotely: drop them locally, but only if nothing
-            // local is holding unsaved changes on them.
-            for (const [id, tracked] of this.cards) {
-              if (!remoteIds.has(id) && !tracked.dirty && !tracked.deleted && tracked.handle) {
-                this.cards.delete(id);
-              }
-            }
-
-            this.lastPulledAt = new Date().toISOString();
-          } catch (err) {
-            this.pullError = err.message;
-          } finally {
-            this.pulling = false;
-            this.emit();
-          }
-        }
-
-        _flagConflict(path) {
-          if (!this.conflicts.some((c) => c.path === path)) {
-            this.conflicts = [
-              ...this.conflicts,
-              { path, message: `${path} changed on GitHub since this loaded.` },
-            ];
-          }
-        }
-
-        startPeriodicPull(intervalMs = 2 * 60 * 1000) {
-          this.stopPeriodicPull();
-          this.pullTimer = setInterval(() => { this.pull().catch(() => {}); }, intervalMs);
-        }
-
-        stopPeriodicPull() {
-          if (this.pullTimer) clearInterval(this.pullTimer);
-          this.pullTimer = null;
-        }
-
-        /**
-         * Best-effort GitHub notification for a card assignment. Failures are
-         * recorded on `notifyError` rather than thrown — a notification
-         * hiccup shouldn't block the card save that triggered it.
-         */
-        async notifyAssignee(card) {
-          if (!card.assignee) return;
-          this.notifyError = null;
-          try {
-            const issueNumber = await this.storage.notifyAssignee(this.repo, card, card.assignee);
-            const tracked = this.cards.get(card.id);
-            if (tracked && issueNumber && issueNumber !== tracked.data.trackingIssueNumber) {
-              tracked.data = { ...tracked.data, trackingIssueNumber: issueNumber };
-              tracked.dirty = true;
-            }
-          } catch (err) {
-            this.notifyError = `Couldn't notify ${card.assignee}: ${err.message}`;
-          } finally {
-            this.emit();
-          }
-        }
       }
 
       function useWorkspace(storage, repo) {
@@ -1512,32 +1309,10 @@
 
         useEffect(() => {
           const unsubscribe = workspace.onChange(() => forceRender((n) => n + 1));
-
-          // Resync on a fixed interval, and also whenever the tab regains
-          // focus/visibility — catches changes made by teammates while this
-          // tab was backgrounded, without waiting for the next tick.
-          const handleFocusResync = () => {
-            if (document.visibilityState !== "hidden") workspace.pull().catch(() => {});
-          };
-
           workspace.load()
-            .then(() => {
-              setLoading(false);
-              workspace.startAutosave();
-              workspace.startPeriodicPull();
-            })
+            .then(() => { setLoading(false); workspace.startAutosave(); })
             .catch((err) => { setError(err.message); setLoading(false); });
-
-          document.addEventListener("visibilitychange", handleFocusResync);
-          window.addEventListener("focus", handleFocusResync);
-
-          return () => {
-            unsubscribe();
-            workspace.stopAutosave();
-            workspace.stopPeriodicPull();
-            document.removeEventListener("visibilitychange", handleFocusResync);
-            window.removeEventListener("focus", handleFocusResync);
-          };
+          return () => { unsubscribe(); workspace.stopAutosave(); };
         }, [workspace]);
 
         return {
@@ -1548,9 +1323,6 @@
           dirty: !loading && !error && workspace.dirtyPaths().length > 0,
           saving: workspace.saving,
           conflicts: workspace.conflicts,
-          pulling: workspace.pulling,
-          lastPulledAt: workspace.lastPulledAt,
-          notifyError: workspace.notifyError,
         };
       }
 
@@ -1563,7 +1335,6 @@
 
       function LoginScreen({ auth, onSignedIn }) {
         const [state, setState] = useState(auth.state);
-        const [copied, setCopied] = useState(false);
 
         useEffect(() => auth.onStateChange(setState), [auth]);
 
@@ -1571,22 +1342,7 @@
           if (state.status === AuthStatus.SignedIn) onSignedIn(state.user);
         }, [state]);
 
-        // Reset the "Copied!" affordance whenever a fresh code arrives.
-        useEffect(() => { setCopied(false); }, [state.userCode]);
-
         const handleLogin = () => { auth.login().catch(() => {}); };
-
-        const handleCopyCode = async () => {
-          if (!state.userCode) return;
-          try {
-            await navigator.clipboard.writeText(state.userCode);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-          } catch {
-            // Clipboard API can be unavailable (insecure context, permissions).
-            // The code is still visible and selectable, so just no-op.
-          }
-        };
 
         return (
           <div className="card">
@@ -1607,17 +1363,7 @@
 
             {state.status === AuthStatus.AwaitingUserVerification && (
               <div>
-                <div className="device-code-row">
-                  <div className="device-code">{state.userCode}</div>
-                  <button
-                    type="button"
-                    className={`copy-code-btn${copied ? " copied" : ""}`}
-                    onClick={handleCopyCode}
-                    title="Copy code to clipboard"
-                  >
-                    {copied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
+                <div className="device-code">{state.userCode}</div>
                 <p style={{ textAlign: "center", fontSize: 14, color: "var(--text-dim)" }}>
                   Go to{" "}
                   <a className="verify-link" href={state.verificationUriComplete} target="_blank" rel="noreferrer">
@@ -1749,16 +1495,6 @@
         );
       }
 
-      function timeAgo(isoString) {
-        const seconds = Math.max(0, Math.round((Date.now() - new Date(isoString).getTime()) / 1000));
-        if (seconds < 10) return "just now";
-        if (seconds < 60) return `${seconds}s ago`;
-        const minutes = Math.round(seconds / 60);
-        if (minutes < 60) return `${minutes}m ago`;
-        const hours = Math.round(minutes / 60);
-        return `${hours}h ago`;
-      }
-
       function statusLabel(status) {
         switch (status) {
           case CardStatus.Backlog: return "Backlog";
@@ -1834,7 +1570,7 @@
         return { supported, listening, interimText, error, start, stop };
       }
 
-      function CardDetailModal({ card, collaborators, repo, onSave, onDelete, onClose }) {
+      function CardDetailModal({ card, collaborators, onSave, onDelete, onClose }) {
         const [title, setTitle] = useState(card.title);
         const [description, setDescription] = useState(card.description || "");
         const [status, setStatus] = useState(card.status);
@@ -1917,19 +1653,6 @@
                       <option key={login} value={login}>{login}</option>
                     ))}
                   </select>
-                  {card.trackingIssueNumber && repo && (
-                    <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "6px 0 0" }}>
-                      Notified via{" "}
-                      <a
-                        className="verify-link"
-                        href={`https://github.com/${repo.owner}/${repo.name}/issues/${card.trackingIssueNumber}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        issue #{card.trackingIssueNumber}
-                      </a>
-                    </p>
-                  )}
                 </div>
               </div>
 
@@ -1947,7 +1670,7 @@
         );
       }
 
-      function BoardView({ workspace, project, collaborators, repo }) {
+      function BoardView({ workspace, project, collaborators }) {
         const [newCardTitles, setNewCardTitles] = useState({});
         const [draggingCardId, setDraggingCardId] = useState(null);
         const [dragOverStatus, setDragOverStatus] = useState(null);
@@ -2046,16 +1769,8 @@
               <CardDetailModal
                 card={selectedCard}
                 collaborators={collaborators}
-                repo={repo}
                 onClose={() => setSelectedCardId(null)}
-                onSave={(updated) => {
-                  const assigneeChanged = updated.assignee && updated.assignee !== selectedCard.assignee;
-                  workspace.upsertCard(updated);
-                  setSelectedCardId(null);
-                  // Fire-and-forget: a notification hiccup shouldn't block
-                  // the card save. Failures surface via workspace.notifyError.
-                  if (assigneeChanged) workspace.notifyAssignee(updated).catch(() => {});
-                }}
+                onSave={(updated) => { workspace.upsertCard(updated); setSelectedCardId(null); }}
                 onDelete={() => { workspace.deleteCard(selectedCardId); setSelectedCardId(null); }}
               />
             )}
@@ -2212,7 +1927,7 @@
       }
 
       function ProjectShell({ repo, storage, onBack }) {
-        const { loading, error, workspace, project, dirty, saving, conflicts, pulling, lastPulledAt, notifyError } = useWorkspace(storage, repo);
+        const { loading, error, workspace, project, dirty, saving, conflicts } = useWorkspace(storage, repo);
         const [view, setView] = useState("dashboard"); // dashboard | board | team
         const [collaboratorLogins, setCollaboratorLogins] = useState([]);
 
@@ -2277,16 +1992,6 @@
                     <button onClick={() => workspace.reloadDiscardingLocalChanges()}>Reload</button>
                   </div>
                 )}
-                {notifyError && (
-                  <div className="error-box" style={{ marginBottom: 0 }}>{notifyError}</div>
-                )}
-                <span className={`sync-status${pulling ? " pulling" : ""}`}>
-                  {pulling ? (
-                    <><Spinner /> Syncing…</>
-                  ) : lastPulledAt ? (
-                    `Synced ${timeAgo(lastPulledAt)}`
-                  ) : null}
-                </span>
                 {saving && <span className="status-line"><Spinner /> Saving…</span>}
                 {!saving && dirty && <span className="status-line">Unsaved changes</span>}
                 {!saving && !dirty && <span className="status-line">All changes saved</span>}
@@ -2303,7 +2008,7 @@
             </div>
 
             {view === "dashboard" && <Dashboard project={project} repo={repo} storage={storage} />}
-            {view === "board" && <BoardView workspace={workspace} project={project} collaborators={collaboratorLogins} repo={repo} />}
+            {view === "board" && <BoardView workspace={workspace} project={project} collaborators={collaboratorLogins} />}
             {view === "team" && <TeamPage repo={repo} storage={storage} />}
           </div>
         );
