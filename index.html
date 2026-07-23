@@ -741,6 +741,20 @@
           return res.json();
         }
 
+        async listCollaborators(repo) {
+          // Repo access list (admin/write/read), not commit-history
+          // "contributors" — this matches who's actually on the jam team per
+          // planning.md's Authorization section, including people who haven't
+          // committed yet. Requires push access to the repo to call.
+          const res = await fetch(
+            `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
+            { headers: this.authHeaders() },
+          );
+          if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
+          const body = await res.json();
+          return body.map((c) => c.login);
+        }
+
         async detectProject(repo) {
           try {
             await this.getFile(repo, "project.json");
@@ -1269,7 +1283,7 @@
         }
       }
 
-      function CardDetailModal({ card, onSave, onDelete, onClose }) {
+      function CardDetailModal({ card, collaborators, onSave, onDelete, onClose }) {
         const [title, setTitle] = useState(card.title);
         const [description, setDescription] = useState(card.description || "");
         const [status, setStatus] = useState(card.status);
@@ -1284,12 +1298,19 @@
             description,
             status,
             tags,
-            assignee: assignee.trim() || null,
+            assignee: assignee || null,
             updatedAt: new Date().toISOString(),
           });
         };
 
         const handleOverlayClick = (e) => { if (e.target === e.currentTarget) onClose(); };
+
+        // If the current assignee isn't in the fetched collaborator list
+        // (removed from the repo since assignment, or the list failed to
+        // load), still show them as an option so they don't silently vanish.
+        const assigneeOptions = card.assignee && !collaborators.includes(card.assignee)
+          ? [card.assignee, ...collaborators]
+          : collaborators;
 
         return (
           <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -1318,8 +1339,13 @@
                   </select>
                 </div>
                 <div className="field">
-                  <label>Assignee (GitHub login)</label>
-                  <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="e.g. octocat" />
+                  <label>Assignee</label>
+                  <select className="status-select" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                    <option value="">Unassigned</option>
+                    {assigneeOptions.map((login) => (
+                      <option key={login} value={login}>{login}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1343,6 +1369,18 @@
         const [draggingCardId, setDraggingCardId] = useState(null);
         const [dragOverStatus, setDragOverStatus] = useState(null);
         const [selectedCardId, setSelectedCardId] = useState(null);
+        const [collaborators, setCollaborators] = useState([]);
+
+        // Fetched once per repo for the assignee dropdown. Failure here
+        // shouldn't block the board — just leaves the dropdown showing
+        // "Unassigned" only, so errors are swallowed rather than surfaced.
+        useEffect(() => {
+          let cancelled = false;
+          storage.listCollaborators(repo)
+            .then((logins) => { if (!cancelled) setCollaborators(logins); })
+            .catch(() => { if (!cancelled) setCollaborators([]); });
+          return () => { cancelled = true; };
+        }, [repo, storage]);
 
         // The board needs more horizontal room than the 560px centered card
         // layout used everywhere else. Widen #root only while this component
@@ -1491,6 +1529,7 @@
             {selectedCard && (
               <CardDetailModal
                 card={selectedCard}
+                collaborators={collaborators}
                 onClose={() => setSelectedCardId(null)}
                 onSave={(updated) => { workspace.upsertCard(updated); setSelectedCardId(null); }}
                 onDelete={() => { workspace.deleteCard(selectedCardId); setSelectedCardId(null); }}
