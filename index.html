@@ -31,7 +31,7 @@
       }
       #root {
         width: 100%;
-        max-width: 560px;
+        max-width: 1200px;
       }
       .card {
         background: var(--panel);
@@ -77,17 +77,43 @@
       .btn-primary:hover {
         filter: brightness(1.05);
       }
+      .device-code-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #0f1115;
+        border: 1px dashed var(--panel-border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 20px 0;
+      }
+
       .device-code {
         font-size: 32px;
         letter-spacing: 4px;
         font-weight: 700;
         text-align: center;
-        background: #0f1115;
-        border: 1px dashed var(--panel-border);
-        border-radius: 8px;
-        padding: 16px;
-        margin: 20px 0;
         color: var(--accent);
+        margin: 0;
+      }
+
+      .copy-btn {
+        background: #171a21;
+        border: 1px solid var(--panel-border);
+        color: var(--text-dim);
+        padding: 8px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
+      }
+
+      .copy-btn:hover {
+        color: var(--text);
+        border-color: var(--accent);
       }
       .status-line {
         display: flex;
@@ -445,7 +471,6 @@
         justify-content: center;
         margin-left: auto;
       }
-
       .modal-overlay {
         position: fixed;
         inset: 0;
@@ -515,7 +540,6 @@
         color: var(--text);
         padding: 10px 12px;
       }
-
       .field-header {
         display: flex;
         align-items: center;
@@ -565,7 +589,6 @@
         color: var(--danger);
         margin-top: 6px;
       }
-
       .view-tabs {
         display: flex;
         gap: 4px;
@@ -591,7 +614,6 @@
         border-color: var(--accent);
         font-weight: 600;
       }
-
       .dashboard-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -615,7 +637,6 @@
         color: var(--text-dim);
         margin-top: 4px;
       }
-
       .dashboard-columns {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -633,908 +654,276 @@
         padding: 20px;
       }
       .dashboard-panel h3 {
-        font-size: 14px;
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin: 0 0 14px;
+        font-size: 15px;
+        margin: 0 0 16px 0;
       }
-
+      .activity-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
       .activity-item {
-        display: flex;
-        gap: 10px;
-        padding: 8px 0;
         border-bottom: 1px solid var(--panel-border);
+        padding: 10px 0;
+        font-size: 13px;
       }
       .activity-item:last-child {
         border-bottom: none;
       }
-      .activity-item img {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        flex-shrink: 0;
+      .activity-msg {
+        font-weight: 500;
+        margin-bottom: 4px;
       }
-      .activity-item .activity-message {
-        font-size: 13px;
-      }
-      .activity-item .activity-meta {
-        font-size: 11px;
+      .activity-meta {
         color: var(--text-dim);
-        margin-top: 2px;
+        font-size: 11px;
       }
-
-      .team-row {
+      .team-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .team-card {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 12px;
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--panel-border);
+        gap: 12px;
       }
-      .team-row:last-child {
-        border-bottom: none;
-      }
-      .team-row img {
-        width: 28px;
-        height: 28px;
+      .team-card img {
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
       }
-      .team-row .team-login {
+      .team-card-name {
+        font-weight: 600;
         font-size: 13px;
-        font-weight: 500;
       }
-      .team-row .badge {
-        margin-left: auto;
-      }
-
-      .sync-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
+      .team-card-perm {
         color: var(--text-dim);
-      }
-      .sync-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--accent);
-        display: inline-block;
-      }
-      .sync-dot.checking {
-        background: #60a5fa;
-        animation: sync-pulse 1s infinite alternate;
-      }
-      @keyframes sync-pulse {
-        from {
-          opacity: 0.3;
-        }
-        to {
-          opacity: 1;
-        }
+        font-size: 11px;
+        text-transform: capitalize;
       }
     </style>
-  </head>
-  <body>
-    <div id="root"></div>
 
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
 
-    <script type="text/plain" id="app-source">
-
-      // =====================================================================
-      // CONFIG
-      // =====================================================================
+    <script id="app-source" type="text/jsx">
       const CONFIG = {
         clientId: "Ov23liy7kjuppgIY5yU1",
-        relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
-        scopes: ["repo"],
+        relayBaseUrl: "https://little-grass-e4c2gamejam-planner-auth-relay.jyoung4242.workers.dev",
+        scope: "repo",
       };
 
-      // =====================================================================
-      // AUTH: types
-      // =====================================================================
+      const STORAGE_KEYS = {
+        ACCESS_TOKEN: "gjp_github_token",
+        USER_DATA: "gjp_github_user",
+      };
+
       const AuthStatus = {
-        SignedOut: "signed-out",
-        AwaitingDeviceCode: "awaiting-device-code",
-        AwaitingUserVerification: "awaiting-user-verification",
-        Polling: "polling",
-        SignedIn: "signed-in",
-        Error: "error",
+        Idle: "IDLE",
+        Starting: "STARTING",
+        AwaitingUserVerification: "AWAITING_VERIFICATION",
+        Polling: "POLLING",
+        Success: "SUCCESS",
+        Error: "ERROR",
       };
 
-      const AuthErrorReason = {
-        AccessDenied: "access-denied",
-        Expired: "expired",
-        NetworkError: "network-error",
-        RelayUnavailable: "relay-unavailable",
-        Unknown: "unknown",
-      };
-
-      // =====================================================================
-      // AUTH: GitHub Device Flow
-      // =====================================================================
-      const SESSION_KEY = "gamejam-planner:github-session";
-
-      class GitHubDeviceFlowAuth {
-        state = { status: AuthStatus.SignedOut };
-        listeners = new Set();
-        pollAbort = null;
-
-        onStateChange(listener) {
-          this.listeners.add(listener);
-          return () => this.listeners.delete(listener);
+      class GitHubAuth {
+        constructor(config) {
+          this.config = config;
         }
 
-        setState(next) {
-          this.state = next;
-          this.listeners.forEach((l) => l(next));
-        }
-
-        async restoreSession() {
-          const raw = sessionStorage.getItem(SESSION_KEY);
-          if (!raw) return null;
-          try {
-            const user = JSON.parse(raw);
-            const ok = await this.verifyToken(user.accessToken);
-            if (!ok) { sessionStorage.removeItem(SESSION_KEY); return null; }
-            this.setState({ status: AuthStatus.SignedIn, user });
-            return user;
-          } catch {
-            sessionStorage.removeItem(SESSION_KEY);
-            return null;
+        getStoredUser() {
+          const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+          const rawUser = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+          if (token && rawUser) {
+            try {
+              return { accessToken: token, profile: JSON.parse(rawUser) };
+            } catch (e) {
+              return null;
+            }
           }
+          return null;
         }
 
-        async login() {
-          this.pollAbort?.abort();
-          this.pollAbort = new AbortController();
-          try {
-            this.setState({ status: AuthStatus.AwaitingDeviceCode });
-            const deviceCode = await this.requestDeviceCode();
-            this.setState({
-              status: AuthStatus.AwaitingUserVerification,
-              userCode: deviceCode.user_code,
-              verificationUri: deviceCode.verification_uri,
-              verificationUriComplete: deviceCode.verification_uri_complete || deviceCode.verification_uri,
-              expiresInSeconds: deviceCode.expires_in,
-            });
-            const accessToken = await this.pollForToken(deviceCode, this.pollAbort.signal);
-            this.setState({ status: AuthStatus.Polling });
-            const user = await this.fetchAuthenticatedUser(accessToken);
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-            this.setState({ status: AuthStatus.SignedIn, user });
-            return user;
-          } catch (err) {
-            this.setState({ status: AuthStatus.Error, error: this.toAuthError(err) });
-            throw err;
-          }
+        saveUserSession(token, profile) {
+          localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+          localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(profile));
         }
 
         logout() {
-          this.pollAbort?.abort();
-          sessionStorage.removeItem(SESSION_KEY);
-          this.setState({ status: AuthStatus.SignedOut });
+          localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+          localStorage.removeItem(STORAGE_KEYS.USER_DATA);
         }
 
         async requestDeviceCode() {
-          const res = await fetch(`${CONFIG.relayBaseUrl}/login/device/code`, {
+          const res = await fetch(`${this.config.relayBaseUrl}/login/device/code`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ client_id: CONFIG.clientId, scope: CONFIG.scopes.join(" ") }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: this.config.clientId,
+              scope: this.config.scope,
+            }),
           });
-          if (!res.ok) throw new Error(`relay:Device code request failed (${res.status})`);
+          if (!res.ok) throw new Error(`Device code request failed: ${res.status}`);
           return res.json();
         }
 
-        async pollForToken(deviceCode, signal) {
-          let intervalMs = Math.max(deviceCode.interval * 1000, 5000);
-          const deadline = Date.now() + deviceCode.expires_in * 1000;
-          while (Date.now() < deadline) {
-            if (signal.aborted) throw new DOMException("Login cancelled", "AbortError");
-            await sleep(intervalMs, signal);
-            const res = await fetch(`${CONFIG.relayBaseUrl}/login/oauth/access_token`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Accept: "application/json" },
-              body: JSON.stringify({
-                client_id: CONFIG.clientId,
-                device_code: deviceCode.device_code,
-                grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-              }),
-            });
-            if (!res.ok) throw new Error(`relay:Token poll failed (${res.status})`);
-            const body = await res.json();
-            if (body.access_token) return body.access_token;
-            switch (body.error) {
-              case "authorization_pending": continue;
-              case "slow_down": intervalMs += 5000; continue;
-              case "expired_token": throw new Error("expired:Device code expired");
-              case "access_denied": throw new Error("denied:Access denied");
-              default: throw new Error(`relay:${body.error_description || "Unknown device flow error"}`);
-            }
-          }
-          throw new Error("expired:Device code expired");
-        }
-
-        async fetchAuthenticatedUser(accessToken) {
-          const res = await fetch("https://api.github.com/user", {
-            headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/vnd.github+json" },
+        async pollForAccessToken(deviceCode) {
+          const res = await fetch(`${this.config.relayBaseUrl}/login/oauth/access_token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: this.config.clientId,
+              device_code: deviceCode,
+              grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+            }),
           });
-          if (!res.ok) throw new Error(`relay:Failed to fetch user profile (${res.status})`);
-          const body = await res.json();
-          return { login: body.login, name: body.name || null, avatarUrl: body.avatar_url, accessToken };
+          if (!res.ok) throw new Error(`Access token request failed: ${res.status}`);
+          return res.json();
         }
 
-        async verifyToken(accessToken) {
+        async fetchUserProfile(accessToken) {
           const res = await fetch("https://api.github.com/user", {
-            headers: { Authorization: `Bearer ${accessToken}` }
+            headers: { Authorization: `Bearer ${accessToken}` },
           });
-          return res.ok;
-        }
-
-        toAuthError(err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (msg.startsWith("denied:")) return { reason: AuthErrorReason.AccessDenied, message: "Sign-in was cancelled or denied." };
-          if (msg.startsWith("expired:")) return { reason: AuthErrorReason.Expired, message: "The login code expired. Please try again." };
-          if (msg.startsWith("relay:")) return { reason: AuthErrorReason.RelayUnavailable, message: msg.slice(6) };
-          if (err instanceof TypeError) return { reason: AuthErrorReason.NetworkError, message: "Network error contacting GitHub." };
-          return { reason: AuthErrorReason.Unknown, message: msg };
+          if (!res.ok) throw new Error(`Fetch user failed: ${res.status}`);
+          return res.json();
         }
       }
 
-      function sleep(ms, signal) {
-        return new Promise((resolve, reject) => {
-          const t = setTimeout(resolve, ms);
-          signal.addEventListener("abort", () => {
-            clearTimeout(t);
-            reject(new DOMException("Login cancelled", "AbortError"));
-          }, { once: true });
+      function useGitHubDeviceFlow(authService) {
+        const [state, setState] = React.useState({
+          status: AuthStatus.Idle,
+          userCode: "",
+          verificationUri: "",
+          verificationUriComplete: "",
+          error: null,
+          user: authService.getStoredUser(),
         });
-      }
 
-      // =====================================================================
-      // STORAGE
-      // =====================================================================
-      const CardStatus = { Backlog: "backlog", InProgress: "in-progress", Blocked: "blocked", Done: "done" };
-      const StorageProviderKind = { GitHub: "github", LocalFolder: "local-folder" };
-      const GAMEJAM_DIR = ".gamejam";
+        const cancelRef = React.useRef(false);
 
-      class StorageConflictError extends Error {
-        constructor(path, localRevision, remoteRevision) {
-          super(`Conflict writing ${path}: local revision ${localRevision} is stale (remote is ${remoteRevision})`);
-          this.name = "StorageConflictError";
-          this.path = path;
-          this.localRevision = localRevision;
-          this.remoteRevision = remoteRevision;
-        }
-      }
+        const startAuth = React.useCallback(async () => {
+          cancelRef.current = false;
+          setState(s => ({ ...s, status: AuthStatus.Starting, error: null }));
 
-      class GitHubStorage {
-        kind = StorageProviderKind.GitHub;
-        constructor(accessToken) {
-          this.accessToken = accessToken;
-        }
-
-        authHeaders(extra = {}) {
-          return { Authorization: `Bearer ${this.accessToken}`, Accept: "application/vnd.github+json", ...extra };
-        }
-
-        async listUserRepos() {
-          const res = await fetch(
-            "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator",
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to list repositories (${res.status})`);
-          return res.json();
-        }
-
-        async listCollaborators(repo) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
-          const body = await res.json();
-          return body.map((c) => c.login);
-        }
-
-        async listCollaboratorsWithPermissions(repo) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
-          const body = await res.json();
-          return body.map((c) => ({
-            login: c.login,
-            avatarUrl: c.avatar_url,
-            permission: c.permissions && c.permissions.admin ? "admin" : c.permissions && c.permissions.push ? "write" : "read",
-          }));
-        }
-
-        readTeam(repo) { return this.getFile(repo, "team.json"); }
-        writeTeam(repo, data, handle) { return this.putFile(repo, "team.json", data, handle, "Sync team roster"); }
-
-        async listRecentActivity(repo, limit = 8) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/commits?path=${GAMEJAM_DIR}&per_page=${limit}`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to load activity (${res.status})`);
-          const body = await res.json();
-          return body.map((c) => ({
-            sha: c.sha,
-            message: c.commit.message.split("\n")[0],
-            authorLogin: c.author ? c.author.login : (c.commit.author ? c.commit.author.name : "unknown"),
-            authorAvatarUrl: c.author ? c.author.avatar_url : null,
-            date: c.commit.author ? c.commit.author.date : null,
-          }));
-        }
-
-        async detectProject(repo) {
           try {
-            await this.getFile(repo, "project.json");
-            return true;
-          } catch (err) {
-            if (err.status === 404) return false;
-            throw err;
-          }
-        }
+            const data = await authService.requestDeviceCode();
+            if (cancelRef.current) return;
 
-        async initProject(repo, manifest) {
-          const emptyBoard = { columns: [] };
-          await this.putFile(repo, "project.json", manifest, null, "Initialize game jam planner");
-          await this.putFile(repo, "board.json", emptyBoard, null, "Initialize game jam planner");
-          await this.putFile(repo, "milestones.json", [], null, "Initialize game jam planner");
-          await this.putFile(repo, "team.json", [], null, "Initialize game jam planner");
-        }
+            const intervalMs = (data.interval || 5) * 1000;
+            const expiresInMs = (data.expires_in || 900) * 1000;
+            const deadline = Date.now() + expiresInMs;
 
-        async loadGameJamFiles(repo) {
-          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}`;
-          const res = await fetch(url, { headers: this.authHeaders() });
-          if (!res.ok) {
-            const err = new Error(`Failed to list ${GAMEJAM_DIR} directory (${res.status})`);
-            err.status = res.status;
-            throw err;
-          }
-          const items = await res.json();
-          const files = {};
-          for (const item of items) {
-            if (item.type === "file") {
-              const fileRes = await fetch(item.download_url);
-              if (!fileRes.ok) continue;
-              const text = await fileRes.text();
+            setState(s => ({
+              ...s,
+              status: AuthStatus.AwaitingUserVerification,
+              userCode: data.user_code,
+              verificationUri: data.verification_uri,
+              verificationUriComplete: data.verification_uri_complete || data.verification_uri,
+            }));
+
+            while (Date.now() < deadline && !cancelRef.current) {
+              await new Promise(r => setTimeout(r, intervalMs));
+              if (cancelRef.current) return;
+
               try {
-                files[item.name] = { data: JSON.parse(text), sha: item.sha };
-              } catch {
-                files[item.name] = { data: text, sha: item.sha };
-              }
-            } else if (item.type === "dir" && item.name === "cards") {
-              const cardsRes = await fetch(item.url, { headers: this.authHeaders() });
-              if (cardsRes.ok) {
-                const cardItems = await cardsRes.json();
-                for (const cardItem of cardItems) {
-                  if (cardItem.type === "file") {
-                    const cRes = await fetch(cardItem.download_url);
-                    if (!cRes.ok) continue;
-                    const cText = await cRes.text();
-                    try {
-                      files[`cards/${cardItem.name}`] = { data: JSON.parse(cText), sha: cardItem.sha };
-                    } catch {
-                      files[`cards/${cardItem.name}`] = { data: cText, sha: cardItem.sha };
-                    }
+                const tokenData = await authService.pollForAccessToken(data.device_code);
+
+                if (tokenData.access_token) {
+                  const profile = await authService.fetchUserProfile(tokenData.access_token);
+                  authService.saveUserSession(tokenData.access_token, profile);
+
+                  if (!cancelRef.current) {
+                    setState({
+                      status: AuthStatus.Success,
+                      userCode: "",
+                      verificationUri: "",
+                      verificationUriComplete: "",
+                      error: null,
+                      user: { accessToken: tokenData.access_token, profile },
+                    });
                   }
+                  return;
                 }
-              }
-            }
-          }
-          return files;
-        }
 
-        async getFile(repo, relPath) {
-          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
-          const res = await fetch(url, { headers: this.authHeaders() });
-          if (!res.ok) {
-            const err = new Error(`Failed to read ${relPath} (${res.status})`);
-            err.status = res.status;
-            throw err;
-          }
-          const body = await res.json();
-          const text = decodeURIComponent(escape(atob(body.content.replace(/\n/g, ""))));
-          return { data: JSON.parse(text), handle: { revision: body.sha, path: relPath } };
-        }
-
-        async putFile(repo, relPath, data, handle, commitMessage = `Update ${relPath}`) {
-          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
-          const jsonText = JSON.stringify(data, null, 2);
-          const encoded = btoa(unescape(encodeURIComponent(jsonText)));
-          const payload = { message: commitMessage, content: encoded };
-          if (handle && handle.revision) payload.sha = handle.revision;
-
-          const res = await fetch(url, {
-            method: "PUT",
-            headers: this.authHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify(payload),
-          });
-
-          if (res.status === 409 || res.status === 422) {
-            let remoteSha = "unknown";
-            try {
-              const fresh = await this.getFile(repo, relPath);
-              remoteSha = fresh.handle.revision;
-            } catch {}
-            throw new StorageConflictError(relPath, handle ? handle.revision : "none", remoteSha);
-          }
-
-          if (!res.ok) throw new Error(`Failed to write ${relPath} (${res.status})`);
-          const body = await res.json();
-          return { revision: body.content.sha, path: relPath };
-        }
-
-        async deleteFile(repo, relPath, handle, commitMessage = `Delete ${relPath}`) {
-          const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
-          const payload = { message: commitMessage, sha: handle.revision };
-
-          const res = await fetch(url, {
-            method: "DELETE",
-            headers: this.authHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify(payload),
-          });
-
-          if (res.status === 409 || res.status === 422) {
-            throw new StorageConflictError(relPath, handle.revision, "unknown");
-          }
-          if (!res.ok) throw new Error(`Failed to delete ${relPath} (${res.status})`);
-        }
-      }
-
-      // =====================================================================
-      // WORKSPACE CLASS (LOCAL-FIRST STATE & SYNC MANAGEMENT)
-      // =====================================================================
-      class Workspace {
-        constructor(repo, storage) {
-          this.repo = repo;
-          this.storage = storage;
-          this.files = new Map();
-          this.shas = new Map();
-          this.dirtyFiles = new Set();
-          this.listeners = new Set();
-          this.autosaveTimer = null;
-          this.pollTimer = null;
-          this.isCheckingSync = false;
-          this.isSaving = false;
-          this.hasConflict = false;
-          this.lastError = null;
-        }
-
-        subscribe(listener) {
-          this.listeners.add(listener);
-          return () => this.listeners.delete(listener);
-        }
-
-        notify() {
-          this.listeners.forEach((l) => l());
-        }
-
-        async load() {
-          const remoteFiles = await this.storage.loadGameJamFiles(this.repo);
-          this.files.clear();
-          this.shas.clear();
-          this.dirtyFiles.clear();
-          this.hasConflict = false;
-          this.lastError = null;
-
-          for (const [path, file] of Object.entries(remoteFiles)) {
-            this.files.set(path, file.data);
-            this.shas.set(path, file.sha);
-          }
-          this.notify();
-        }
-
-        getProject() { return this.files.get("project.json"); }
-        getBoard() { return this.files.get("board.json") || { columns: [] }; }
-
-        getCards() {
-          const cards = [];
-          for (const [path, data] of this.files.entries()) {
-            if (path.startsWith("cards/") && path.endsWith(".json")) {
-              cards.push(data);
-            }
-          }
-          return cards;
-        }
-
-        getCard(id) { return this.files.get(`cards/${id}.json`); }
-
-        setCard(card) {
-          const path = `cards/${card.id}.json`;
-          this.files.set(path, card);
-          this.dirtyFiles.add(path);
-          this.notify();
-        }
-
-        deleteCard(cardId) {
-          const path = `cards/${cardId}.json`;
-          this.files.delete(path);
-          this.dirtyFiles.add(path);
-
-          const board = this.getBoard();
-          let boardChanged = false;
-          const updatedColumns = board.columns.map((col) => {
-            if (col.cardIds.includes(cardId)) {
-              boardChanged = true;
-              return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
-            }
-            return col;
-          });
-
-          if (boardChanged) {
-            this.files.set("board.json", { ...board, columns: updatedColumns });
-            this.dirtyFiles.add("board.json");
-          }
-          this.notify();
-        }
-
-        moveCard(cardId, newStatus) {
-          const card = this.getCard(cardId);
-          if (!card) return;
-
-          const updatedCard = { ...card, status: newStatus, updatedAt: new Date().toISOString() };
-          this.setCard(updatedCard);
-
-          const board = this.getBoard();
-          let boardChanged = false;
-
-          const updatedColumns = board.columns.map((col) => {
-            const hasCard = col.cardIds.includes(cardId);
-            if (col.status === newStatus) {
-              if (!hasCard) {
-                boardChanged = true;
-                return { ...col, cardIds: [...col.cardIds, cardId] };
-              }
-            } else {
-              if (hasCard) {
-                boardChanged = true;
-                return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
-              }
-            }
-            return col;
-          });
-
-          if (boardChanged) {
-            this.files.set("board.json", { ...board, columns: updatedColumns });
-            this.dirtyFiles.add("board.json");
-            this.notify();
-          }
-        }
-
-        async save() {
-          if (this.dirtyFiles.size === 0 || this.isSaving) return;
-          this.isSaving = true;
-          this.lastError = null;
-          this.notify();
-
-          const dirtyList = Array.from(this.dirtyFiles);
-
-          try {
-            for (const path of dirtyList) {
-              const data = this.files.get(path);
-              const sha = this.shas.get(path);
-
-              if (data === undefined) {
-                if (sha) {
-                  await this.storage.deleteFile(this.repo, path, { revision: sha, path });
-                  this.shas.delete(path);
+                if (tokenData.error === "authorization_pending") continue;
+                if (tokenData.error === "slow_down") {
+                  await new Promise(r => setTimeout(r, 5000));
+                  continue;
                 }
-              } else {
-                const handle = sha ? { revision: sha, path } : null;
-                const result = await this.storage.putFile(this.repo, path, data, handle);
-                this.shas.set(path, result.revision);
-              }
-              this.dirtyFiles.delete(path);
-            }
-            this.hasConflict = false;
-          } catch (err) {
-            console.error("Save error:", err);
-            if (err instanceof StorageConflictError) {
-              this.hasConflict = true;
-            }
-            this.lastError = err.message || "Failed to save changes.";
-          } finally {
-            this.isSaving = false;
-            this.notify();
-          }
-        }
-
-        async checkRemoteSync() {
-          if (!this.storage || !this.repo || this.isSaving || this.isCheckingSync) return;
-
-          this.isCheckingSync = true;
-          this.notify();
-
-          try {
-            const remoteFiles = await this.storage.loadGameJamFiles(this.repo);
-            let updatedClean = false;
-            let conflictDetected = false;
-
-            // Tracks files present remotely
-            const remotePaths = new Set(Object.keys(remoteFiles));
-
-            for (const [path, remoteFile] of Object.entries(remoteFiles)) {
-              const localFile = this.files.get(path);
-              const isDirty = this.dirtyFiles.has(path);
-              const localBaseSha = this.shas.get(path);
-
-              if (!localFile && !localBaseSha) {
-                // Case A/B: New file added remotely (and not locally known) -> adopt
-                this.files.set(path, remoteFile.data);
-                this.shas.set(path, remoteFile.sha);
-                updatedClean = true;
-                continue;
-              }
-
-              if (remoteFile.sha !== localBaseSha) {
-                if (!isDirty) {
-                  // Case B: Clean file updated remotely -> update local copy silently
-                  this.files.set(path, remoteFile.data);
-                  this.shas.set(path, remoteFile.sha);
-                  updatedClean = true;
-                } else {
-                  // Case D: File modified remotely AND modified locally -> conflict!
-                  conflictDetected = true;
-                }
+                throw new Error(tokenData.error_description || tokenData.error || "Authentication failed");
+              } catch (err) {
+                if (err.message.includes("authorization_pending")) continue;
+                throw err;
               }
             }
 
-            // Check for clean files deleted remotely
-            for (const path of Array.from(this.files.keys())) {
-              if (!remotePaths.has(path)) {
-                if (!this.dirtyFiles.has(path)) {
-                  this.files.delete(path);
-                  this.shas.delete(path);
-                  updatedClean = true;
-                } else {
-                  conflictDetected = true;
-                }
-              }
-            }
-
-            if (conflictDetected) {
-              this.hasConflict = true;
-            }
-
-            if (updatedClean || conflictDetected) {
-              this.notify();
+            if (!cancelRef.current) {
+              throw new Error("Device code expired. Please try again.");
             }
           } catch (err) {
-            console.warn("Background polling check failed:", err);
-          } finally {
-            this.isCheckingSync = false;
-            this.notify();
+            if (!cancelRef.current) {
+              setState(s => ({ ...s, status: AuthStatus.Error, error: err.message }));
+            }
           }
-        }
+        }, [authService]);
 
-        startAutosave(intervalMs = 5000) {
-          this.stopAutosave();
-          this.autosaveTimer = setInterval(() => {
-            if (this.dirtyFiles.size > 0 && !this.hasConflict) {
-              this.save();
-            }
-          }, intervalMs);
-        }
-
-        stopAutosave() {
-          if (this.autosaveTimer) clearInterval(this.autosaveTimer);
-          this.autosaveTimer = null;
-        }
-
-        startPolling(intervalMs = 30000) {
-          this.stopPolling();
-          this.pollTimer = setInterval(() => this.checkRemoteSync(), intervalMs);
-        }
-
-        stopPolling() {
-          if (this.pollTimer) clearInterval(this.pollTimer);
-          this.pollTimer = null;
-        }
-      }
-
-      function useWorkspace(repo, storage) {
-        const [ws, setWs] = React.useState(null);
-        const [loading, setLoading] = React.useState(true);
-        const [, setTick] = React.useState(0);
-
-        React.useEffect(() => {
-          let active = true;
-          const workspace = new Workspace(repo, storage);
-          workspace.load().then(() => {
-            if (active) {
-              setWs(workspace);
-              setLoading(false);
-            }
+        const logout = React.useCallback(() => {
+          cancelRef.current = true;
+          authService.logout();
+          setState({
+            status: AuthStatus.Idle,
+            userCode: "",
+            verificationUri: "",
+            verificationUriComplete: "",
+            error: null,
+            user: null,
           });
+        }, [authService]);
 
-          return () => {
-            active = false;
-            workspace.stopAutosave();
-            workspace.stopPolling();
-          };
-        }, [repo.owner, repo.name, storage]);
-
-        React.useEffect(() => {
-          if (!ws) return;
-          const unsub = ws.subscribe(() => setTick((t) => t + 1));
-          ws.startAutosave(5000);
-          ws.startPolling(30000);
-
-          return () => {
-            unsub();
-            ws.stopAutosave();
-            ws.stopPolling();
-          };
-        }, [ws]);
-
-        return { ws, loading };
+        return { ...state, startAuth, logout };
       }
 
-      // =====================================================================
-      // UI: SPEECH-TO-TEXT HOOK
-      // =====================================================================
-      function useSpeechToText() {
-        const [isListening, setIsListening] = React.useState(false);
-        const [transcript, setTranscript] = React.useState("");
-        const [interimTranscript, setInterimTranscript] = React.useState("");
-        const [error, setError] = React.useState(null);
+      function GitHubAuthGate({ auth, children }) {
+        const state = useGitHubDeviceFlow(auth);
+        const [copied, setCopied] = React.useState(false);
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const isSupported = Boolean(SpeechRecognition);
-
-        const recognitionRef = React.useRef(null);
-
-        const startListening = React.useCallback(() => {
-          if (!isSupported) {
-            setError("Speech recognition is not supported in this browser.");
-            return;
-          }
-          setError(null);
-          setTranscript("");
-          setInterimTranscript("");
-
-          const recognition = new SpeechRecognition();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognition.lang = "en-US";
-
-          recognition.onresult = (event) => {
-            let finalAcc = "";
-            let interimAcc = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-              const text = event.results[i][0].transcript;
-              if (event.results[i].isFinal) {
-                finalAcc += text + " ";
-              } else {
-                interimAcc += text;
-              }
-            }
-            if (finalAcc) setTranscript((prev) => (prev ? `${prev} ${finalAcc}` : finalAcc).trim());
-            setInterimTranscript(interimAcc);
-          };
-
-          recognition.onerror = (event) => {
-            setError(`Speech recognition error: ${event.error}`);
-            setIsListening(false);
-          };
-
-          recognition.onend = () => {
-            setIsListening(false);
-            setInterimTranscript("");
-          };
-
-          recognitionRef.current = recognition;
-          recognition.start();
-          setIsListening(true);
-        }, [isSupported, SpeechRecognition]);
-
-        const stopListening = React.useCallback(() => {
-          if (recognitionRef.current) {
-            recognitionRef.current.stop();
-          }
-        }, []);
-
-        return { isSupported, isListening, transcript, interimTranscript, error, startListening, stopListening };
-      }
-
-      // =====================================================================
-      // UI: COMPONENTS
-      // =====================================================================
-
-      function Header({ user, repo, onLogout, onBack, ws }) {
-        const isDirty = ws ? ws.dirtyFiles.size > 0 : false;
-        const isSaving = ws ? ws.isSaving : false;
-        const hasConflict = ws ? ws.hasConflict : false;
-        const isCheckingSync = ws ? ws.isCheckingSync : false;
-
-        return (
-          <header style={{ borderBottom: "1px solid var(--panel-border)", paddingBottom: "16px", marginBottom: "20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {onBack && (
-                  <button onClick={onBack} style={{ padding: "6px 12px", fontSize: "12px" }}>
-                    &larr; Switch Repo
-                  </button>
-                )}
-                <div>
-                  <h1 style={{ fontSize: "18px", margin: 0 }}>{repo ? repo.name : "Game Jam Planner"}</h1>
-                  {repo && <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>{repo.owner}</div>}
-                </div>
-              </div>
-
-              {ws && (
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div className="sync-indicator">
-                    <span className={`sync-dot ${isCheckingSync ? "checking" : ""}`}></span>
-                    <span>{isCheckingSync ? "Syncing..." : isDirty ? "Unsaved changes" : "Synced"}</span>
-                  </div>
-
-                  <button
-                    onClick={() => ws.save()}
-                    disabled={!isDirty || isSaving || hasConflict}
-                    className={isDirty && !hasConflict ? "btn-primary" : ""}
-                    style={{ width: "auto", padding: "6px 16px", fontSize: "13px" }}
-                  >
-                    {isSaving ? "Saving..." : "Save Now"}
-                  </button>
-                </div>
-              )}
-
-              {user && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <img src={user.avatarUrl} alt={user.login} style={{ width: "28px", height: "28px", borderRadius: "50%" }} />
-                  <span style={{ fontSize: "13px", fontWeight: "500" }}>{user.login}</span>
-                  <button onClick={onLogout} style={{ padding: "4px 8px", fontSize: "12px" }}>Log out</button>
-                </div>
-              )}
-            </div>
-
-            {hasConflict && (
-              <div className="error-box" style={{ marginTop: "16px", marginBottom: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span><strong>Conflict Detected:</strong> Remote changes overlap with local edits. Please reload to sync latest state.</span>
-                <button onClick={() => ws.load()} style={{ fontSize: "12px", padding: "4px 10px", backgroundColor: "var(--danger)", color: "#fff", border: "none" }}>
-                  Reload Workspace
-                </button>
-              </div>
-            )}
-          </header>
-        );
-      }
-
-      function AuthGate({ auth, children }) {
-        const [state, setState] = React.useState(auth.state);
-
-        React.useEffect(() => {
-          const unsub = auth.onStateChange(setState);
-          auth.restoreSession();
-          return unsub;
-        }, [auth]);
-
-        if (state.status === AuthStatus.SignedIn) {
-          return children(state.user);
+        if (state.user) {
+          return children(state.user, state.logout);
         }
+
+        const handleCopyCode = () => {
+          if (state.userCode) {
+            navigator.clipboard.writeText(state.userCode);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }
+        };
 
         return (
           <div className="card">
             <h1 className="title">Game Jam Planner</h1>
-            <p className="subtitle">GitHub-backed local-first planner</p>
+            <p className="subtitle">Sign in with GitHub to access or create a planner repo.</p>
 
-            {state.status === AuthStatus.SignedOut && (
-              <button className="btn-primary" onClick={() => auth.login()}>
-                Sign in with GitHub
+            {state.error && <div className="error-box">{state.error}</div>}
+
+            {state.status === AuthStatus.Idle && (
+              <button className="btn-primary" onClick={state.startAuth}>
+                Connect GitHub Account
               </button>
             )}
 
-            {state.status === AuthStatus.AwaitingDeviceCode && (
+            {state.status === AuthStatus.Starting && (
               <div className="status-line">
                 <div className="spinner"></div>
                 <span>Requesting device code...</span>
@@ -1543,10 +932,13 @@
 
             {state.status === AuthStatus.AwaitingUserVerification && (
               <div>
-                <p style={{ fontSize: "13px", color: "var(--text-dim)", margin: 0 }}>
-                  Enter this code on GitHub to authorize:
-                </p>
-                <div className="device-code">{state.userCode}</div>
+                <p style={{ fontSize: "13px", color: "var(--text-dim)", margin: 0 }}>Enter this code on GitHub to authorize:</p>
+                <div className="device-code-container">
+                  <div className="device-code">{state.userCode}</div>
+                  <button type="button" className="copy-btn" onClick={handleCopyCode}>
+                    {copied ? "✓ Copied" : "📋 Copy"}
+                  </button>
+                </div>
                 <a
                   href={state.verificationUriComplete}
                   target="_blank"
@@ -1562,273 +954,535 @@
                 </div>
               </div>
             )}
-
-            {state.status === AuthStatus.Error && (
-              <div>
-                <div className="error-box">{state.error?.message || "Authentication failed."}</div>
-                <button className="btn-primary" onClick={() => auth.login()}>
-                  Try Again
-                </button>
-              </div>
-            )}
           </div>
         );
+      }
+
+      class GitHubStorage {
+        constructor(token) {
+          this.token = token;
+        }
+
+        authHeaders() {
+          return {
+            Authorization: `Bearer ${this.token}`,
+            Accept: "application/vnd.github.v3+json",
+          };
+        }
+
+        async listRepositories() {
+          const res = await fetch("https://api.github.com/user/repos?sort=updated&per_page=100", {
+            headers: this.authHeaders(),
+          });
+          if (!res.ok) throw new Error(`Failed to fetch repositories (${res.status})`);
+          return res.json();
+        }
+
+        async getFile(repo, path) {
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${path}`, {
+            headers: this.authHeaders(),
+          });
+          if (res.status === 404) return null;
+          if (!res.ok) throw new Error(`Failed to fetch ${path} (${res.status})`);
+          const data = await res.json();
+          const text = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+          return { sha: data.sha, content: JSON.parse(text) };
+        }
+
+        async saveFile(repo, path, content, sha, message) {
+          const jsonString = JSON.stringify(content, null, 2);
+          const encoded = btoa(unescape(encodeURIComponent(jsonString)));
+          const body = {
+            message: message || `Update ${path}`,
+            content: encoded,
+            ...(sha ? { sha } : {}),
+          };
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${path}`, {
+            method: "PUT",
+            headers: {
+              ...this.authHeaders(),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || `Failed to save ${path} (${res.status})`);
+          }
+          return res.json();
+        }
+
+        async createRepository(name, isPrivate) {
+          const res = await fetch("https://api.github.com/user/repos", {
+            method: "POST",
+            headers: {
+              ...this.authHeaders(),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name,
+              private: isPrivate,
+              auto_init: true,
+              description: "Game Jam Planner Project",
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || `Failed to create repository (${res.status})`);
+          }
+          return res.json();
+        }
+
+        async listCommits(repo) {
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/commits?path=.gamejam&per_page=20`, {
+            headers: this.authHeaders(),
+          });
+          if (!res.ok) return [];
+          return res.json();
+        }
+
+        async listCollaborators(repo) {
+          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`, {
+            headers: this.authHeaders(),
+          });
+          if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
+          return res.json();
+        }
       }
 
       function RepoPicker({ storage, onSelectRepo, onLogout }) {
         const [repos, setRepos] = React.useState([]);
         const [loading, setLoading] = React.useState(true);
         const [error, setError] = React.useState(null);
+        const [mode, setMode] = React.useState("select"); // 'select' | 'create'
+        const [newRepoName, setNewRepoName] = React.useState("");
+        const [isPrivate, setIsPrivate] = React.useState(true);
+        const [creating, setCreating] = React.useState(false);
 
         React.useEffect(() => {
+          let cancel = false;
+          setLoading(true);
           storage
-            .listUserRepos()
-            .then((res) => {
-              setRepos(res);
-              setLoading(false);
+            .listRepositories()
+            .then(list => {
+              if (!cancel) {
+                setRepos(list);
+                setLoading(false);
+              }
             })
-            .catch((err) => {
-              setError(err.message || "Failed to load repos");
-              setLoading(false);
+            .catch(err => {
+              if (!cancel) {
+                setError(err.message);
+                setLoading(false);
+              }
             });
+          return () => {
+            cancel = true;
+          };
         }, [storage]);
 
-        if (loading) {
-          return (
-            <div className="card">
-              <div className="status-line">
-                <div className="spinner"></div>
-                <span>Loading repositories...</span>
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h2 className="title" style={{ fontSize: "16px" }}>Select a Repository</h2>
-              <button onClick={onLogout} className="link-btn">Log out</button>
-            </div>
-            {error && <div className="error-box">{error}</div>}
-            <ul className="repo-list">
-              {repos.map((r) => (
-                <li key={r.id} className="repo-item" onClick={() => onSelectRepo(r)}>
-                  <div>
-                    <div className="repo-name">{r.full_name}</div>
-                    <div className="repo-meta">Updated {new Date(r.updated_at).toLocaleDateString()}</div>
-                  </div>
-                  {r.private && <span className="badge">Private</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      }
-
-      function ProjectGate({ repo, storage, onBack }) {
-        const [hasProject, setHasProject] = React.useState(null);
-        const [loading, setLoading] = React.useState(true);
-        const [error, setError] = React.useState(null);
-
-        // Wizard form
-        const [jam, setJam] = React.useState("");
-        const [theme, setTheme] = React.useState("");
-        const [initializing, setInitializing] = React.useState(false);
-
-        React.useEffect(() => {
-          storage
-            .detectProject(repo)
-            .then((exists) => {
-              setHasProject(exists);
-              setLoading(false);
-            })
-            .catch((err) => {
-              setError(err.message || "Failed to check repo");
-              setLoading(false);
-            });
-        }, [repo, storage]);
-
-        const handleInit = async (e) => {
+        const handleCreate = async e => {
           e.preventDefault();
-          setInitializing(true);
+          if (!newRepoName.trim()) return;
+          setCreating(true);
+          setError(null);
           try {
-            const manifest = {
-              id: repo.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
-              name: repo.name,
-              description: "",
-              jam: jam || "Game Jam",
-              theme: theme || "TBD",
-              createdAt: new Date().toISOString(),
-              storage: { kind: StorageProviderKind.GitHub, githubOwner: repo.owner, githubRepo: repo.name },
-            };
-            await storage.initProject(repo, manifest);
-            setHasProject(true);
+            const created = await storage.createRepository(newRepoName.trim(), isPrivate);
+            onSelectRepo(created);
           } catch (err) {
-            setError(err.message || "Failed to initialize project");
-          } finally {
-            setInitializing(false);
+            setError(err.message);
+            setCreating(false);
           }
         };
 
-        if (loading) {
-          return (
-            <div className="card">
-              <div className="status-line">
-                <div className="spinner"></div>
-                <span>Checking repository for Game Jam Planner files...</span>
-              </div>
-            </div>
-          );
-        }
-
-        if (hasProject) {
-          return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
-        }
-
         return (
           <div className="card">
-            <div className="breadcrumb">
-              <button onClick={onBack}>&larr; Repos</button>
-              <span>{repo.full_name}</span>
-            </div>
-            <h2 className="title">Initialize Game Jam Planner</h2>
-            <p className="subtitle">No `.gamejam/` config found in this repo. Initialize it to start planning.</p>
-            {error && <div className="error-box">{error}</div>}
-            <form onSubmit={handleInit}>
-              <div className="field">
-                <label>Jam Name</label>
-                <input type="text" placeholder="e.g. Ludum Dare 55" value={jam} onChange={(e) => setJam(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label>Theme</label>
-                <input type="text" placeholder="e.g. Summoning" value={theme} onChange={(e) => setTheme(e.target.value)} required />
-              </div>
-              <button type="submit" className="btn-primary" disabled={initializing}>
-                {initializing ? "Initializing .gamejam/..." : "Initialize Project"}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h1 className="title">Select Repository</h1>
+              <button className="link-btn" onClick={onLogout}>
+                Sign Out
               </button>
-            </form>
+            </div>
+            <p className="subtitle">Choose an existing repository or create a new one for your project.</p>
+
+            {error && <div className="error-box">{error}</div>}
+
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <button className={mode === "select" ? "btn-primary" : ""} style={{ flex: 1 }} onClick={() => setMode("select")}>
+                Existing Repo
+              </button>
+              <button className={mode === "create" ? "btn-primary" : ""} style={{ flex: 1 }} onClick={() => setMode("create")}>
+                New Repo
+              </button>
+            </div>
+
+            {mode === "select" && (
+              <div>
+                {loading && (
+                  <div className="status-line">
+                    <div className="spinner"></div>
+                    <span>Loading repositories...</span>
+                  </div>
+                )}
+                {!loading && repos.length === 0 && <p className="empty-state">No repositories found.</p>}
+                {!loading && repos.length > 0 && (
+                  <ul className="repo-list">
+                    {repos.map(repo => (
+                      <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
+                        <div>
+                          <div className="repo-name">{repo.full_name}</div>
+                          <div className="repo-meta">Updated {new Date(repo.updated_at).toLocaleDateString()}</div>
+                        </div>
+                        <span className="badge">{repo.private ? "Private" : "Public"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {mode === "create" && (
+              <form onSubmit={handleCreate}>
+                <div className="field">
+                  <label>Repository Name</label>
+                  <input
+                    type="text"
+                    value={newRepoName}
+                    onChange={e => setNewRepoName(e.target.value)}
+                    placeholder="my-game-jam"
+                    required
+                  />
+                </div>
+                <div className="field" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="checkbox"
+                    id="priv"
+                    checked={isPrivate}
+                    onChange={e => setIsPrivate(e.target.checked)}
+                    style={{ width: "auto" }}
+                  />
+                  <label htmlFor="priv" style={{ margin: 0, cursor: "pointer" }}>
+                    Make repository private
+                  </label>
+                </div>
+                <button type="submit" className="btn-primary" disabled={creating || !newRepoName.trim()}>
+                  {creating ? "Creating..." : "Create & Select"}
+                </button>
+              </form>
+            )}
           </div>
         );
       }
 
-      function CardEditModal({ card, collaborators, onSave, onDelete, onClose }) {
+      function useWorkspace(storage, repo) {
+        const [project, setProject] = React.useState(null);
+        const [board, setBoard] = React.useState(null);
+        const [shas, setShas] = React.useState({});
+        const [loading, setLoading] = React.useState(true);
+        const [saving, setSaving] = React.useState(false);
+        const [error, setError] = React.useState(null);
+        const [isDirty, setIsDirty] = React.useState(false);
+        const [conflict, setConflict] = React.useState(false);
+
+        const loadWorkspace = React.useCallback(async () => {
+          setLoading(true);
+          setError(null);
+          try {
+            const projFile = await storage.getFile(repo, ".gamejam/project.json");
+            const boardFile = await storage.getFile(repo, ".gamejam/board.json");
+
+            if (projFile && boardFile) {
+              setProject(projFile.content);
+              setBoard(boardFile.content);
+              setShas({
+                project: projFile.sha,
+                board: boardFile.sha,
+              });
+            } else {
+              setProject(null);
+              setBoard(null);
+            }
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }, [storage, repo]);
+
+        React.useEffect(() => {
+          loadWorkspace();
+        }, [loadWorkspace]);
+
+        const initWorkspace = async details => {
+          setLoading(true);
+          setError(null);
+          try {
+            const initialProject = {
+              name: details.name,
+              description: details.description || "",
+              jam: details.jam || "",
+              theme: details.theme || "",
+              created_at: new Date().toISOString(),
+            };
+            const initialBoard = {
+              columns: [
+                { id: "backlog", title: "Backlog" },
+                { id: "in-progress", title: "In Progress" },
+                { id: "blocked", title: "Blocked" },
+                { id: "done", title: "Done" },
+              ],
+              cards: [
+                {
+                  id: "card-1",
+                  title: "Setup Unity / Godot Project",
+                  description: "Initialize repository and set up folder structure.",
+                  status: "done",
+                  tag: "Tech",
+                },
+                {
+                  id: "card-2",
+                  title: "Design Player Movement",
+                  description: "Implement basic locomotion and jump feel.",
+                  status: "in-progress",
+                  tag: "Design",
+                },
+              ],
+            };
+
+            const projRes = await storage.saveFile(
+              repo,
+              ".gamejam/project.json",
+              initialProject,
+              null,
+              "Initialize Game Jam project details",
+            );
+            const boardRes = await storage.saveFile(repo, ".gamejam/board.json", initialBoard, null, "Initialize Game Jam board");
+
+            setProject(initialProject);
+            setBoard(initialBoard);
+            setShas({
+              project: projRes.content.sha,
+              board: boardRes.content.sha,
+            });
+            setIsDirty(false);
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const updateBoard = updater => {
+          setBoard(prev => {
+            const next = typeof updater === "function" ? updater(prev) : updater;
+            setIsDirty(true);
+            return next;
+          });
+        };
+
+        const saveChanges = async () => {
+          if (!isDirty || saving) return;
+          setSaving(true);
+          setError(null);
+          setConflict(false);
+          try {
+            const boardRes = await storage.saveFile(repo, ".gamejam/board.json", board, shas.board, "Update board state");
+            setShas(s => ({ ...s, board: boardRes.content.sha }));
+            setIsDirty(false);
+          } catch (err) {
+            if (err.message.includes("409") || err.message.includes("sha")) {
+              setConflict(true);
+            } else {
+              setError(err.message);
+            }
+          } finally {
+            setSaving(false);
+          }
+        };
+
+        return {
+          project,
+          board,
+          loading,
+          saving,
+          error,
+          isDirty,
+          conflict,
+          initWorkspace,
+          updateBoard,
+          saveChanges,
+          reload: loadWorkspace,
+        };
+      }
+
+      function SpeechInputButton({ onTranscript }) {
+        const [listening, setListening] = React.useState(false);
+        const [supported, setSupported] = React.useState(false);
+        const [error, setError] = React.useState(null);
+        const recognitionRef = React.useRef(null);
+
+        React.useEffect(() => {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (SpeechRecognition) {
+            setSupported(true);
+            const rec = new SpeechRecognition();
+            rec.continuous = false;
+            rec.interimResults = false;
+            rec.lang = "en-US";
+
+            rec.onresult = event => {
+              const text = event.results[0][0].transcript;
+              onTranscript(text);
+              setListening(false);
+            };
+
+            rec.onerror = evt => {
+              setError(evt.error || "Speech error");
+              setListening(false);
+            };
+
+            rec.onend = () => {
+              setListening(false);
+            };
+
+            recognitionRef.current = rec;
+          }
+        }, [onTranscript]);
+
+        const toggleListening = () => {
+          if (!supported || !recognitionRef.current) return;
+          setError(null);
+          if (listening) {
+            recognitionRef.current.stop();
+            setListening(false);
+          } else {
+            try {
+              recognitionRef.current.start();
+              setListening(true);
+            } catch (err) {
+              setError("Could not start microphone");
+            }
+          }
+        };
+
+        if (!supported) return null;
+
+        return (
+          <div style={{ display: "inline-block" }}>
+            <button
+              type="button"
+              className={`mic-button ${listening ? "listening" : ""}`}
+              onClick={toggleListening}
+              title={listening ? "Listening... click to stop" : "Speak text"}
+            >
+              🎤
+            </button>
+            {error && <div className="speech-error">{error}</div>}
+          </div>
+        );
+      }
+
+      function CardEditModal({ card, columns, collaborators, onSave, onDelete, onClose }) {
         const [title, setTitle] = React.useState(card ? card.title : "");
         const [description, setDescription] = React.useState(card ? card.description || "" : "");
-        const [status, setStatus] = React.useState(card ? card.status : CardStatus.Backlog);
-        const [tag, setTag] = React.useState(card && card.tags ? card.tags[0] || "" : "");
+        const [status, setStatus] = React.useState(card ? card.status : columns[0]?.id || "backlog");
+        const [tag, setTag] = React.useState(card ? card.tag || "" : "");
         const [assignee, setAssignee] = React.useState(card ? card.assignee || "" : "");
 
-        const titleSTT = useSpeechToText();
-        const descSTT = useSpeechToText();
-
-        React.useEffect(() => {
-          if (titleSTT.transcript) setTitle((prev) => (prev ? `${prev} ${titleSTT.transcript}` : titleSTT.transcript));
-        }, [titleSTT.transcript]);
-
-        React.useEffect(() => {
-          if (descSTT.transcript) setDescription((prev) => (prev ? `${prev} ${descSTT.transcript}` : descSTT.transcript));
-        }, [descSTT.transcript]);
-
-        const handleSubmit = (e) => {
+        const handleSubmit = e => {
           e.preventDefault();
           if (!title.trim()) return;
-          const updatedCard = {
+          onSave({
             id: card ? card.id : `card-${Date.now()}`,
             title: title.trim(),
             description: description.trim(),
             status,
-            tags: tag.trim() ? [tag.trim()] : [],
-            assignee: assignee || null,
-            createdAt: card ? card.createdAt : new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          onSave(updatedCard);
+            tag: tag.trim(),
+            assignee,
+          });
         };
 
         return (
           <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-panel" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h2 className="title" style={{ fontSize: "16px", margin: 0 }}>
+                <h2 className="title" style={{ fontSize: "16px" }}>
                   {card ? "Edit Card" : "New Card"}
                 </h2>
-                <button className="modal-close" onClick={onClose}>&times;</button>
+                <button type="button" className="modal-close" onClick={onClose}>
+                  ✕
+                </button>
               </div>
 
               <form onSubmit={handleSubmit}>
                 <div className="field">
                   <div className="field-header">
                     <label>Title</label>
-                    {titleSTT.isSupported && (
-                      <button
-                        type="button"
-                        className={`mic-button ${titleSTT.isListening ? "listening" : ""}`}
-                        onClick={titleSTT.isListening ? titleSTT.stopListening : titleSTT.startListening}
-                        title={titleSTT.isListening ? "Stop listening" : "Dictate title"}
-                      >
-                        🎤
-                      </button>
-                    )}
+                    <SpeechInputButton onTranscript={txt => setTitle(prev => (prev ? prev + " " + txt : txt))} />
                   </div>
-                  <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Card title" required />
-                  {titleSTT.interimTranscript && <div className="interim-text">{titleSTT.interimTranscript}</div>}
-                  {titleSTT.error && <div className="speech-error">{titleSTT.error}</div>}
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="Card title..."
+                    required
+                    autoFocus
+                  />
                 </div>
 
                 <div className="field">
                   <div className="field-header">
                     <label>Description</label>
-                    {descSTT.isSupported && (
-                      <button
-                        type="button"
-                        className={`mic-button ${descSTT.isListening ? "listening" : ""}`}
-                        onClick={descSTT.isListening ? descSTT.stopListening : descSTT.startListening}
-                        title={descSTT.isListening ? "Stop listening" : "Dictate description"}
-                      >
-                        🎤
-                      </button>
-                    )}
+                    <SpeechInputButton onTranscript={txt => setDescription(prev => (prev ? prev + " " + txt : txt))} />
                   </div>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Card details..." />
-                  {descSTT.interimTranscript && <div className="interim-text">{descSTT.interimTranscript}</div>}
-                  {descSTT.error && <div className="speech-error">{descSTT.error}</div>}
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Add details, notes, links..."
+                  />
                 </div>
 
                 <div className="row-2">
                   <div className="field">
-                    <label>Status</label>
-                    <select className="status-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                      <option value={CardStatus.Backlog}>Backlog</option>
-                      <option value={CardStatus.InProgress}>In Progress</option>
-                      <option value={CardStatus.Blocked}>Blocked</option>
-                      <option value={CardStatus.Done}>Done</option>
+                    <label>Status Column</label>
+                    <select className="status-select" value={status} onChange={e => setStatus(e.target.value)}>
+                      {columns.map(col => (
+                        <option key={col.id} value={col.id}>
+                          {col.title}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="field">
-                    <label>Tag</label>
-                    <input type="text" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. Audio, Code" />
+                    <label>Tag / Category</label>
+                    <input type="text" value={tag} onChange={e => setTag(e.target.value)} placeholder="e.g. Code, Art, Sound" />
                   </div>
                 </div>
 
                 <div className="field">
                   <label>Assignee</label>
-                  <select className="status-select" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                  <select className="status-select" value={assignee} onChange={e => setAssignee(e.target.value)}>
                     <option value="">Unassigned</option>
-                    {collaborators.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                    {collaborators.map(c => (
+                      <option key={c.login} value={c.login}>
+                        {c.login}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="modal-footer">
-                  {card && onDelete ? (
+                  {card ? (
                     <button type="button" className="btn-danger-text" onClick={() => onDelete(card.id)}>
                       Delete Card
                     </button>
-                  ) : <div />}
-                  <button type="submit" className="btn-primary">Save Card</button>
+                  ) : (
+                    <div></div>
+                  )}
+                  <button type="submit" className="btn-primary" disabled={!title.trim()}>
+                    {card ? "Save Changes" : "Create Card"}
+                  </button>
                 </div>
               </form>
             </div>
@@ -1836,89 +1490,109 @@
         );
       }
 
-      function BoardView({ ws, storage, repo }) {
+      function KanbanBoard({ workspace, collaborators }) {
+        const { board, updateBoard } = workspace;
         const [editingCard, setEditingCard] = React.useState(null);
-        const [isNewCardOpen, setIsNewCardOpen] = React.useState(false);
-        const [collaborators, setCollaborators] = React.useState([]);
+        const [isCreating, setIsCreating] = React.useState(false);
+        const [targetColForNewCard, setTargetColForNewCard] = React.useState(null);
         const [draggedCardId, setDraggedCardId] = React.useState(null);
-        const [dragOverCol, setDragOverCol] = React.useState(null);
+        const [dragOverColId, setDragOverColId] = React.useState(null);
 
-        const project = ws.getProject();
-        const cards = ws.getCards();
+        if (!board) return null;
 
-        React.useEffect(() => {
-          storage.listCollaborators(repo).then(setCollaborators).catch(() => {});
-        }, [storage, repo]);
-
-        const columns = [
-          { id: CardStatus.Backlog, title: "Backlog" },
-          { id: CardStatus.InProgress, title: "In Progress" },
-          { id: CardStatus.Blocked, title: "Blocked" },
-          { id: CardStatus.Done, title: "Done" },
-        ];
-
-        const getCardsByStatus = (status) => cards.filter((c) => c.status === status);
-
-        const handleSaveCard = (card) => {
-          ws.setCard(card);
+        const handleSaveCard = cardData => {
+          updateBoard(prev => {
+            const exists = prev.cards.some(c => c.id === cardData.id);
+            const nextCards = exists ? prev.cards.map(c => (c.id === cardData.id ? cardData : c)) : [...prev.cards, cardData];
+            return { ...prev, cards: nextCards };
+          });
           setEditingCard(null);
-          setIsNewCardOpen(false);
+          setIsCreating(false);
         };
 
-        const handleDeleteCard = (cardId) => {
-          ws.deleteCard(cardId);
+        const handleDeleteCard = cardId => {
+          updateBoard(prev => ({
+            ...prev,
+            cards: prev.cards.filter(c => c.id !== cardId),
+          }));
           setEditingCard(null);
         };
 
         const handleDragStart = (e, cardId) => {
           e.dataTransfer.setData("text/plain", cardId);
+          e.dataTransfer.effectAllowed = "move";
           setDraggedCardId(cardId);
+        };
+
+        const handleDragEnd = () => {
+          setDraggedCardId(null);
+          setDragOverColId(null);
         };
 
         const handleDragOver = (e, colId) => {
           e.preventDefault();
-          setDragOverCol(colId);
+          e.dataTransfer.dropEffect = "move";
+          if (dragOverColId !== colId) {
+            setDragOverColId(colId);
+          }
         };
 
-        const handleDragLeave = (e, colId) => {
-          if (dragOverCol === colId) setDragOverCol(null);
+        const handleDragLeave = colId => {
+          if (dragOverColId === colId) {
+            setDragOverColId(null);
+          }
         };
 
         const handleDrop = (e, colId) => {
           e.preventDefault();
           const cardId = e.dataTransfer.getData("text/plain") || draggedCardId;
-          if (cardId) {
-            ws.moveCard(cardId, colId);
-          }
+          if (!cardId) return;
+
+          updateBoard(prev => ({
+            ...prev,
+            cards: prev.cards.map(c => (c.id === cardId ? { ...c, status: colId } : c)),
+          }));
+
           setDraggedCardId(null);
-          setDragOverCol(null);
+          setDragOverColId(null);
         };
 
         return (
           <div>
             <div className="board-topbar">
               <div>
-                <h2 className="title" style={{ fontSize: "20px" }}>{project ? project.name : "Board"}</h2>
-                <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
-                  {project ? `${project.jam} • Theme: ${project.theme}` : ""}
-                </div>
+                <h2 className="title" style={{ fontSize: "18px" }}>
+                  Task Board
+                </h2>
+                <p className="subtitle" style={{ margin: 0 }}>
+                  Drag cards between columns or click to edit.
+                </p>
               </div>
               <div className="board-topbar-actions">
-                <button className="btn-primary" onClick={() => setIsNewCardOpen(true)}>+ Add Card</button>
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setTargetColForNewCard(board.columns[0]?.id || "backlog");
+                    setIsCreating(true);
+                  }}
+                >
+                  + Add Card
+                </button>
               </div>
             </div>
 
             <div className="board-columns">
-              {columns.map((col) => {
-                const colCards = getCardsByStatus(col.id);
-                const isOver = dragOverCol === col.id;
+              {board.columns.map(col => {
+                const colCards = board.cards.filter(c => c.status === col.id);
+                const isOver = dragOverColId === col.id;
+
                 return (
                   <div
                     key={col.id}
                     className={`board-column ${isOver ? "drag-over" : ""}`}
-                    onDragOver={(e) => handleDragOver(e, col.id)}
-                    onDragLeave={(e) => handleDragLeave(e, col.id)}
-                    onDrop={(e) => handleDrop(e, col.id)}
+                    onDragOver={e => handleDragOver(e, col.id)}
+                    onDragLeave={() => handleDragLeave(col.id)}
+                    onDrop={e => handleDrop(e, col.id)}
                   >
                     <div className="board-column-header">
                       <span>{col.title}</span>
@@ -1926,40 +1600,64 @@
                     </div>
 
                     <div className="board-column-cards">
-                      {colCards.map((card) => (
-                        <div
-                          key={card.id}
-                          className={`board-card board-card--${card.status} ${draggedCardId === card.id ? "dragging" : ""}`}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, card.id)}
-                          onClick={() => setEditingCard(card)}
-                        >
-                          <div className="card-meta-row">
-                            {card.tags && card.tags.length > 0 && <span className="tag-pill">{card.tags[0]}</span>}
-                            {card.assignee && (
-                              <div className="avatar-badge" title={`Assigned to ${card.assignee}`}>
-                                {card.assignee.charAt(0).toUpperCase()}
+                      {colCards.map(card => {
+                        const isDragging = draggedCardId === card.id;
+                        return (
+                          <div
+                            key={card.id}
+                            draggable
+                            onDragStart={e => handleDragStart(e, card.id)}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => setEditingCard(card)}
+                            className={`board-card board-card--${card.status} ${isDragging ? "dragging" : ""}`}
+                          >
+                            {(card.tag || card.assignee) && (
+                              <div className="card-meta-row">
+                                {card.tag && <span className="tag-pill">{card.tag}</span>}
+                                {card.assignee && (
+                                  <div className="avatar-badge" title={`Assigned to ${card.assignee}`}>
+                                    {card.assignee.substring(0, 2).toUpperCase()}
+                                  </div>
+                                )}
                               </div>
                             )}
+                            <div className="board-card-title">{card.title}</div>
                           </div>
-                          <div className="board-card-title">{card.title}</div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
+
+                    <button
+                      type="button"
+                      style={{
+                        width: "100%",
+                        fontSize: "12px",
+                        padding: "6px",
+                        background: "transparent",
+                        borderStyle: "dashed",
+                      }}
+                      onClick={() => {
+                        setTargetColForNewCard(col.id);
+                        setIsCreating(true);
+                      }}
+                    >
+                      + Add Card
+                    </button>
                   </div>
                 );
               })}
             </div>
 
-            {(editingCard || isNewCardOpen) && (
+            {(editingCard || isCreating) && (
               <CardEditModal
                 card={editingCard}
+                columns={board.columns}
                 collaborators={collaborators}
                 onSave={handleSaveCard}
-                onDelete={editingCard ? handleDeleteCard : null}
+                onDelete={handleDeleteCard}
                 onClose={() => {
                   setEditingCard(null);
-                  setIsNewCardOpen(false);
+                  setIsCreating(false);
                 }}
               />
             )}
@@ -1967,201 +1665,253 @@
         );
       }
 
-      function DashboardView({ ws, storage, repo }) {
-        const [activity, setActivity] = React.useState([]);
-        const [team, setTeam] = React.useState([]);
-        const [loading, setLoading] = React.useState(true);
+      function ProjectDashboard({ workspace, commits, collaborators }) {
+        const { project, board } = workspace;
+        if (!project || !board) return null;
 
-        const project = ws.getProject();
-        const cards = ws.getCards();
-
-        const total = cards.length;
-        const done = cards.filter((c) => c.status === CardStatus.Done).length;
-        const inProgress = cards.filter((c) => c.status === CardStatus.InProgress).length;
-        const blocked = cards.filter((c) => c.status === CardStatus.Blocked).length;
-
-        React.useEffect(() => {
-          let active = true;
-          Promise.all([
-            storage.listRecentActivity(repo),
-            storage.listCollaboratorsWithPermissions(repo),
-          ])
-            .then(([act, tm]) => {
-              if (active) {
-                setActivity(act);
-                setTeam(tm);
-                setLoading(false);
-              }
-            })
-            .catch(() => {
-              if (active) setLoading(false);
-            });
-          return () => { active = false; };
-        }, [storage, repo]);
+        const totalCards = board.cards.length;
+        const doneCards = board.cards.filter(c => c.status === "done").length;
+        const inProgressCards = board.cards.filter(c => c.status === "in-progress").length;
+        const percent = totalCards === 0 ? 0 : Math.round((doneCards / totalCards) * 100);
 
         return (
           <div>
-            <div style={{ marginBottom: "20px" }}>
-              <h2 className="title" style={{ fontSize: "20px" }}>{project ? project.name : "Dashboard"}</h2>
-              <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
-                {project ? `${project.jam} • Theme: ${project.theme}` : ""}
-              </div>
-            </div>
-
             <div className="dashboard-grid">
               <div className="dashboard-stat">
-                <div className="stat-value">{total}</div>
-                <div className="stat-label">Total Cards</div>
+                <div className="stat-value">{percent}%</div>
+                <div className="stat-label">Progress Done</div>
               </div>
               <div className="dashboard-stat">
-                <div className="stat-value" style={{ color: "#60a5fa" }}>{inProgress}</div>
+                <div className="stat-value">{totalCards}</div>
+                <div className="stat-label">Total Tasks</div>
+              </div>
+              <div className="dashboard-stat">
+                <div className="stat-value">{inProgressCards}</div>
                 <div className="stat-label">In Progress</div>
               </div>
               <div className="dashboard-stat">
-                <div className="stat-value" style={{ color: "var(--danger)" }}>{blocked}</div>
-                <div className="stat-label">Blocked</div>
-              </div>
-              <div className="dashboard-stat">
-                <div className="stat-value" style={{ color: "var(--accent)" }}>{done}</div>
-                <div className="stat-label">Completed</div>
+                <div className="stat-value">{collaborators.length}</div>
+                <div className="stat-label">Team Members</div>
               </div>
             </div>
 
             <div className="dashboard-columns">
               <div className="dashboard-panel">
                 <h3>Recent Activity</h3>
-                {loading ? (
-                  <div className="status-line"><div className="spinner"></div><span>Loading activity...</span></div>
-                ) : activity.length === 0 ? (
-                  <div className="empty-state">No recent activity</div>
+                {commits.length === 0 ? (
+                  <p className="empty-state">No recent activity found.</p>
                 ) : (
-                  activity.map((a) => (
-                    <div key={a.sha} className="activity-item">
-                      {a.authorAvatarUrl && <img src={a.authorAvatarUrl} alt={a.authorLogin} />}
-                      <div>
-                        <div className="activity-message">{a.message}</div>
+                  <ul className="activity-list">
+                    {commits.map(c => (
+                      <li key={c.sha} className="activity-item">
+                        <div className="activity-msg">{c.commit.message}</div>
                         <div className="activity-meta">
-                          {a.authorLogin} • {a.date ? new Date(a.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                          {c.commit.author.name} • {new Date(c.commit.author.date).toLocaleString()}
                         </div>
-                      </div>
-                    </div>
-                  ))
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
 
               <div className="dashboard-panel">
-                <h3>Team Members</h3>
-                {loading ? (
-                  <div className="status-line"><div className="spinner"></div><span>Loading team...</span></div>
-                ) : team.length === 0 ? (
-                  <div className="empty-state">No team members found</div>
-                ) : (
-                  team.map((m) => (
-                    <div key={m.login} className="team-row">
-                      <img src={m.avatarUrl} alt={m.login} />
-                      <span className="team-login">{m.login}</span>
-                      <span className="badge">{m.permission}</span>
-                    </div>
-                  ))
-                )}
+                <h3>Project Information</h3>
+                <div style={{ fontSize: "13px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Jam: </span>
+                    <span>{project.jam || "Not set"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Theme: </span>
+                    <span>{project.theme || "Not set"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Description: </span>
+                    <span>{project.description || "No description provided."}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         );
       }
 
-      function TeamView({ storage, repo }) {
-        const [team, setTeam] = React.useState([]);
-        const [loading, setLoading] = React.useState(true);
-        const [error, setError] = React.useState(null);
-
-        React.useEffect(() => {
-          storage
-            .listCollaboratorsWithPermissions(repo)
-            .then((res) => {
-              setTeam(res);
-              setLoading(false);
-            })
-            .catch((err) => {
-              setError(err.message || "Failed to load team");
-              setLoading(false);
-            });
-        }, [storage, repo]);
-
-        if (loading) {
-          return (
-            <div className="status-line">
-              <div className="spinner"></div>
-              <span>Loading team members...</span>
-            </div>
-          );
-        }
-
+      function TeamTab({ collaborators, repo }) {
         return (
           <div>
-            <h2 className="title" style={{ fontSize: "20px", marginBottom: "16px" }}>Team Collaborators</h2>
-            {error && <div className="error-box">{error}</div>}
-            <div className="dashboard-panel">
-              {team.map((m) => (
-                <div key={m.login} className="team-row" style={{ padding: "12px 0" }}>
-                  <img src={m.avatarUrl} alt={m.login} style={{ width: "36px", height: "36px" }} />
-                  <div>
-                    <div style={{ fontWeight: "600", fontSize: "14px" }}>{m.login}</div>
-                    <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>Repository Collaborator</div>
-                  </div>
-                  <span className="badge" style={{ fontSize: "12px", padding: "4px 10px" }}>{m.permission}</span>
-                </div>
-              ))}
+            <div style={{ marginBottom: "20px" }}>
+              <h2 className="title" style={{ fontSize: "18px" }}>
+                Team Collaborators
+              </h2>
+              <p className="subtitle" style={{ margin: 0 }}>
+                People with access to the <code>{repo.full_name}</code> repository.
+              </p>
             </div>
+
+            {collaborators.length === 0 ? (
+              <p className="empty-state">No collaborators found or loading permissions...</p>
+            ) : (
+              <div className="team-grid">
+                {collaborators.map(c => {
+                  const perm = c.permissions ? (c.permissions.admin ? "Admin" : c.permissions.push ? "Write" : "Read") : "Member";
+                  return (
+                    <div key={c.login} className="team-card">
+                      <img src={c.avatar_url} alt={c.login} />
+                      <div>
+                        <div className="team-card-name">{c.login}</div>
+                        <div className="team-card-perm">{perm} Access</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function InitWizard({ storage, repo, onInit }) {
+        const [name, setName] = React.useState(repo.name);
+        const [description, setDescription] = React.useState("");
+        const [jam, setJam] = React.useState("");
+        const [theme, setTheme] = React.useState("");
+        const [submitting, setSubmitting] = React.useState(false);
+
+        const handleSubmit = async e => {
+          e.preventDefault();
+          setSubmitting(true);
+          await onInit({ name, description, jam, theme });
+          setSubmitting(false);
+        };
+
+        return (
+          <div className="card">
+            <h1 className="title">Initialize Game Jam Planner</h1>
+            <p className="subtitle">
+              Repository <code>{repo.full_name}</code> doesn't have a planner setup yet.
+            </p>
+
+            <form onSubmit={handleSubmit}>
+              <div className="field">
+                <label>Game Title</label>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} required />
+              </div>
+              <div className="field">
+                <label>Game Jam Name</label>
+                <input type="text" value={jam} onChange={e => setJam(e.target.value)} placeholder="e.g. Ludum Dare 55" />
+              </div>
+              <div className="field">
+                <label>Jam Theme</label>
+                <input type="text" value={theme} onChange={e => setTheme(e.target.value)} placeholder="e.g. Summoning" />
+              </div>
+              <div className="field">
+                <label>Short Pitch / Description</label>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="What is your game concept?"
+                />
+              </div>
+
+              <button type="submit" className="btn-primary" disabled={submitting}>
+                {submitting ? "Initializing .gamejam/ ..." : "Initialize Planner"}
+              </button>
+            </form>
           </div>
         );
       }
 
       function ProjectShell({ repo, storage, onBack }) {
-        const { ws, loading } = useWorkspace(repo, storage);
-        const [activeTab, setActiveTab] = React.useState("board");
+        const workspace = useWorkspace(storage, repo);
+        const [activeTab, setActiveTab] = React.useState("board"); // 'dashboard' | 'board' | 'team'
+        const [commits, setCommits] = React.useState([]);
+        const [collaborators, setCollaborators] = React.useState([]);
 
-        if (loading || !ws) {
+        React.useEffect(() => {
+          if (workspace.project) {
+            storage.listCommits(repo).then(setCommits).catch(console.error);
+            storage.listCollaborators(repo).then(setCollaborators).catch(console.error);
+          }
+        }, [workspace.project, repo, storage]);
+
+        if (workspace.loading) {
           return (
             <div className="card">
               <div className="status-line">
                 <div className="spinner"></div>
-                <span>Syncing workspace files with GitHub...</span>
+                <span>Loading workspace from GitHub...</span>
               </div>
             </div>
           );
         }
 
-        return (
-          <div style={{ width: "100%", maxWidth: "960px", margin: "0 auto" }}>
-            <Header repo={repo} ws={ws} onBack={onBack} />
+        if (!workspace.project) {
+          return <InitWizard storage={storage} repo={repo} onInit={workspace.initWorkspace} />;
+        }
 
-            <div className="view-tabs">
-              <button className={activeTab === "board" ? "active" : ""} onClick={() => setActiveTab("board")}>
-                Kanban Board
-              </button>
-              <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => setActiveTab("dashboard")}>
-                Dashboard
-              </button>
-              <button className={activeTab === "team" ? "active" : ""} onClick={() => setActiveTab("team")}>
-                Team
-              </button>
+        return (
+          <div>
+            <div className="breadcrumb">
+              <button onClick={onBack}>&larr; Switch Repo</button>
+              <span>/</span>
+              <strong style={{ color: "var(--text)" }}>{workspace.project.name}</strong>
+              <span style={{ fontSize: "11px", color: "var(--text-dim)", marginLeft: "auto" }}>{repo.full_name}</span>
             </div>
 
-            {activeTab === "board" && <BoardView ws={ws} storage={storage} repo={repo} />}
-            {activeTab === "dashboard" && <DashboardView ws={ws} storage={storage} repo={repo} />}
-            {activeTab === "team" && <TeamView storage={storage} repo={repo} />}
+            {workspace.error && <div className="error-box">{workspace.error}</div>}
+
+            {workspace.conflict && (
+              <div className="error-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Conflict detected! Remote changes exist. Reload to get latest state.</span>
+                <button onClick={workspace.reload} style={{ fontSize: "12px", padding: "4px 8px" }}>
+                  Reload Workspace
+                </button>
+              </div>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div className="view-tabs" style={{ marginBottom: 0, borderBottom: "none" }}>
+                <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => setActiveTab("dashboard")}>
+                  Dashboard
+                </button>
+                <button className={activeTab === "board" ? "active" : ""} onClick={() => setActiveTab("board")}>
+                  Board
+                </button>
+                <button className={activeTab === "team" ? "active" : ""} onClick={() => setActiveTab("team")}>
+                  Team
+                </button>
+              </div>
+
+              <div>
+                <button
+                  className="btn-primary"
+                  style={{ width: "auto", padding: "8px 16px" }}
+                  disabled={!workspace.isDirty || workspace.saving}
+                  onClick={workspace.saveChanges}
+                >
+                  {workspace.saving ? "Saving..." : workspace.isDirty ? "Save Changes" : "Saved"}
+                </button>
+              </div>
+            </div>
+
+            {activeTab === "dashboard" && <ProjectDashboard workspace={workspace} commits={commits} collaborators={collaborators} />}
+            {activeTab === "board" && <KanbanBoard workspace={workspace} collaborators={collaborators} />}
+            {activeTab === "team" && <TeamTab collaborators={collaborators} repo={repo} />}
           </div>
         );
       }
 
+      function ProjectGate({ repo, storage, onBack }) {
+        return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
+      }
+
       function App() {
-        const auth = React.useMemo(() => new GitHubDeviceFlowAuth(), []);
+        const auth = React.useMemo(() => new GitHubAuth(CONFIG), []);
         const [selectedRepo, setSelectedRepo] = React.useState(null);
 
         return (
-          <AuthGate auth={auth}>
-            {(user) => {
+          <GitHubAuthGate auth={auth}>
+            {user => {
               const storage = new GitHubStorage(user.accessToken);
 
               if (!selectedRepo) {
@@ -2169,18 +1919,20 @@
                   <RepoPicker
                     storage={storage}
                     onLogout={() => auth.logout()}
-                    onSelectRepo={(repo) => setSelectedRepo({
-                      owner: repo.owner.login,
-                      name: repo.name,
-                      full_name: repo.full_name,
-                    })}
+                    onSelectRepo={repo =>
+                      setSelectedRepo({
+                        owner: repo.owner.login,
+                        name: repo.name,
+                        full_name: repo.full_name,
+                      })
+                    }
                   />
                 );
               }
 
               return <ProjectGate repo={selectedRepo} storage={storage} onBack={() => setSelectedRepo(null)} />;
             }}
-          </AuthGate>
+          </GitHubAuthGate>
         );
       }
 

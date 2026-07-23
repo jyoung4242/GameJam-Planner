@@ -1,0 +1,2242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game Jam Planner</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-border: #262b36;
+        --text: #e7e9ee;
+        --text-dim: #9aa2b1;
+        --accent: #6ee7b7;
+        --accent-dim: #2e5a4a;
+        --danger: #f87171;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      #root {
+        width: 100%;
+        max-width: 1200px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 32px;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 14px;
+        margin: 0 0 24px;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
+        background: #1f232c;
+        color: var(--text);
+        padding: 10px 16px;
+        transition: border-color 0.15s;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #0f1115;
+        border-color: var(--accent);
+        font-weight: 600;
+        width: 100%;
+        padding: 12px 16px;
+      }
+      .btn-primary:hover {
+        filter: brightness(1.05);
+      }
+      .device-code-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #0f1115;
+        border: 1px dashed var(--panel-border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 20px 0;
+      }
+
+      .device-code {
+        font-size: 32px;
+        letter-spacing: 4px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--accent);
+        margin: 0; /* overridden from previous rule */
+      }
+
+      .copy-btn {
+        background: #171a21;
+        border: 1px solid var(--panel-border);
+        color: var(--text-dim);
+        padding: 8px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
+      }
+
+      .copy-btn:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-top: 16px;
+      }
+      .spinner {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid var(--panel-border);
+        border-top-color: var(--accent);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .error-box {
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .repo-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .repo-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .repo-item:hover {
+        border-color: var(--accent);
+        background: #1b1f27;
+      }
+      .repo-name {
+        font-weight: 500;
+      }
+      .repo-meta {
+        color: var(--text-dim);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .badge {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--accent-dim);
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .user-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+      .user-row img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+      }
+      .user-row .name {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .user-row .login {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .link-btn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 12px;
+        padding: 4px;
+        margin-left: auto;
+      }
+      .link-btn:hover {
+        color: var(--text);
+        border-color: transparent;
+      }
+      a.verify-link {
+        color: var(--accent);
+      }
+      .empty-state {
+        color: var(--text-dim);
+        font-size: 13px;
+        text-align: center;
+        padding: 24px 0;
+      }
+      .field {
+        margin-bottom: 16px;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-bottom: 6px;
+      }
+      .field input,
+      .field textarea {
+        width: 100%;
+        font: inherit;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+      .field input:focus,
+      .field textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .field textarea {
+        resize: vertical;
+        min-height: 64px;
+      }
+      .row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .breadcrumb button {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .stat-box {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+      }
+      .stat-box .stat-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .stat-box .stat-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+
+      .board-topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .board-topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .board-topbar-actions button.btn-primary {
+        width: auto;
+        padding: 8px 20px;
+      }
+      .board-columns {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+      .board-column {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 14px;
+        width: 260px;
+        flex: 0 0 260px;
+        display: flex;
+        flex-direction: column;
+        max-height: max(320px, calc(100vh - 220px));
+      }
+      .board-column-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 10px;
+      }
+      .board-column-count {
+        background: #0f1115;
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+      }
+      .board-column-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 24px;
+        margin-bottom: 10px;
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .board-column-cards::-webkit-scrollbar {
+        width: 6px;
+      }
+      .board-column-cards::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .board-column-cards::-webkit-scrollbar-thumb {
+        background: var(--panel-border);
+        border-radius: 999px;
+      }
+      .board-column-cards::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-dim);
+      }
+      .board-card {
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .board-card-title {
+        font-size: 13px;
+        margin-bottom: 8px;
+        overflow-wrap: anywhere;
+      }
+      .board-card-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .board-card-actions button {
+        padding: 3px 8px;
+        font-size: 11px;
+        border-radius: 6px;
+      }
+      .board-card-delete {
+        margin-left: auto;
+        color: var(--danger);
+      }
+      .add-card-row {
+        display: flex;
+        gap: 6px;
+      }
+      .add-card-row input {
+        flex: 1;
+        font-size: 13px;
+        padding: 7px 10px;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        color: var(--text);
+      }
+      .add-card-row button {
+        padding: 7px 12px;
+      }
+
+      .board-column.drag-over {
+        border-color: var(--accent);
+        background: #1b1f27;
+      }
+      .board-card {
+        cursor: pointer;
+        border-left: 3px solid var(--panel-border);
+        transition:
+          opacity 0.15s,
+          border-color 0.15s,
+          transform 0.1s;
+      }
+      .board-card:hover {
+        border-color: var(--accent);
+      }
+      .board-card.dragging {
+        opacity: 0.4;
+      }
+      .board-card--backlog {
+        border-left-color: #6b7280;
+      }
+      .board-card--in-progress {
+        border-left-color: #60a5fa;
+      }
+      .board-card--blocked {
+        border-left-color: var(--danger);
+      }
+      .board-card--done {
+        border-left-color: var(--accent);
+      }
+
+      .card-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .tag-pill {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #1f232c;
+        color: var(--text-dim);
+        border: 1px solid var(--panel-border);
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .avatar-badge {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent-dim);
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 50;
+      }
+      .modal-panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 28px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 85vh;
+        overflow-y: auto;
+      }
+      .modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 18px;
+        line-height: 1;
+        padding: 4px;
+      }
+      .modal-close:hover {
+        color: var(--text);
+        border-color: transparent;
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 20px;
+        gap: 12px;
+      }
+      .modal-footer .btn-primary {
+        width: auto;
+        padding: 10px 24px;
+      }
+      .btn-danger-text {
+        background: none;
+        border: none;
+        color: var(--danger);
+        padding: 8px 4px;
+      }
+      .btn-danger-text:hover {
+        border-color: transparent;
+        text-decoration: underline;
+      }
+      .status-select {
+        width: 100%;
+        font: inherit;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+
+      .field-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .field-header label {
+        margin-bottom: 0;
+      }
+      .mic-button {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .mic-button.listening {
+        border-color: var(--danger);
+        color: var(--danger);
+        animation: mic-pulse 1.2s infinite;
+      }
+      .mic-button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      @keyframes mic-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(248, 113, 113, 0);
+        }
+      }
+      .interim-text {
+        font-size: 12px;
+        color: var(--text-dim);
+        font-style: italic;
+        margin-top: 6px;
+      }
+      .speech-error {
+        font-size: 12px;
+        color: var(--danger);
+        margin-top: 6px;
+      }
+
+      .view-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .view-tabs button {
+        background: none;
+        border: none;
+        border-radius: 0;
+        border-bottom: 2px solid transparent;
+        padding: 10px 4px;
+        margin-right: 20px;
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      .view-tabs button:hover {
+        border-color: var(--panel-border);
+        color: var(--text);
+      }
+      .view-tabs button.active {
+        color: var(--accent);
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .dashboard-stat {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 18px;
+        text-align: center;
+      }
+      .dashboard-stat .stat-value {
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .dashboard-stat .stat-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 4px;
+      }
+
+      .dashboard-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 720px) {
+        .dashboard-columns {
+          grid-template-columns: 1fr;
+        }
+      }
+      .dashboard-panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .dashboard-panel h3 {
+        font-size: 14px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 0 0 14px;
+      }
+
+      .activity-item {
+        display: flex;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .activity-item:last-child {
+        border-bottom: none;
+      }
+      .activity-item img {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .activity-item .activity-message {
+        font-size: 13px;
+      }
+      .activity-item .activity-meta {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+
+      .team-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--panel-border);
+      }
+      .team-row:last-child {
+        border-bottom: none;
+      }
+      .team-row img {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+      }
+      .team-row .team-login {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .team-row .badge {
+        margin-left: auto;
+      }
+
+      .sync-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .sync-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: inline-block;
+      }
+      .sync-dot.checking {
+        background: #60a5fa;
+        animation: sync-pulse 1s infinite alternate;
+      }
+      @keyframes sync-pulse {
+        from {
+          opacity: 0.3;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/plain" id="app-source">
+
+            // =====================================================================
+            // CONFIG
+            // =====================================================================
+            const CONFIG = {
+              clientId: "Ov23liy7kjuppgIY5yU1",
+              relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
+              scopes: ["repo"],
+            };
+
+            // =====================================================================
+            // AUTH: types
+            // =====================================================================
+            const AuthStatus = {
+              SignedOut: "signed-out",
+              AwaitingDeviceCode: "awaiting-device-code",
+              AwaitingUserVerification: "awaiting-user-verification",
+              Polling: "polling",
+              SignedIn: "signed-in",
+              Error: "error",
+            };
+
+            const AuthErrorReason = {
+              AccessDenied: "access-denied",
+              Expired: "expired",
+              NetworkError: "network-error",
+              RelayUnavailable: "relay-unavailable",
+              Unknown: "unknown",
+            };
+
+            // =====================================================================
+            // AUTH: GitHub Device Flow
+            // =====================================================================
+            const SESSION_KEY = "gamejam-planner:github-session";
+
+            class GitHubDeviceFlowAuth {
+              state = { status: AuthStatus.SignedOut };
+              listeners = new Set();
+              pollAbort = null;
+
+              onStateChange(listener) {
+                this.listeners.add(listener);
+                return () => this.listeners.delete(listener);
+              }
+
+              setState(next) {
+                this.state = next;
+                this.listeners.forEach((l) => l(next));
+              }
+
+              async restoreSession() {
+                const raw = sessionStorage.getItem(SESSION_KEY);
+                if (!raw) return null;
+                try {
+                  const user = JSON.parse(raw);
+                  const ok = await this.verifyToken(user.accessToken);
+                  if (!ok) { sessionStorage.removeItem(SESSION_KEY); return null; }
+                  this.setState({ status: AuthStatus.SignedIn, user });
+                  return user;
+                } catch {
+                  sessionStorage.removeItem(SESSION_KEY);
+                  return null;
+                }
+              }
+
+              async login() {
+                this.pollAbort?.abort();
+                this.pollAbort = new AbortController();
+                try {
+                  this.setState({ status: AuthStatus.AwaitingDeviceCode });
+                  const deviceCode = await this.requestDeviceCode();
+                  this.setState({
+                    status: AuthStatus.AwaitingUserVerification,
+                    userCode: deviceCode.user_code,
+                    verificationUri: deviceCode.verification_uri,
+                    verificationUriComplete: deviceCode.verification_uri_complete || deviceCode.verification_uri,
+                    expiresInSeconds: deviceCode.expires_in,
+                  });
+                  const accessToken = await this.pollForToken(deviceCode, this.pollAbort.signal);
+                  this.setState({ status: AuthStatus.Polling });
+                  const user = await this.fetchAuthenticatedUser(accessToken);
+                  sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+                  this.setState({ status: AuthStatus.SignedIn, user });
+                  return user;
+                } catch (err) {
+                  this.setState({ status: AuthStatus.Error, error: this.toAuthError(err) });
+                  throw err;
+                }
+              }
+
+              logout() {
+                this.pollAbort?.abort();
+                sessionStorage.removeItem(SESSION_KEY);
+                this.setState({ status: AuthStatus.SignedOut });
+              }
+
+              async requestDeviceCode() {
+                const res = await fetch(`${CONFIG.relayBaseUrl}/login/device/code`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Accept: "application/json" },
+                  body: JSON.stringify({ client_id: CONFIG.clientId, scope: CONFIG.scopes.join(" ") }),
+                });
+                if (!res.ok) throw new Error(`relay:Device code request failed (${res.status})`);
+                return res.json();
+              }
+
+              async pollForToken(deviceCode, signal) {
+                let intervalMs = Math.max(deviceCode.interval * 1000, 5000);
+                const deadline = Date.now() + deviceCode.expires_in * 1000;
+                while (Date.now() < deadline) {
+                  if (signal.aborted) throw new DOMException("Login cancelled", "AbortError");
+                  await sleep(intervalMs, signal);
+                  const res = await fetch(`${CONFIG.relayBaseUrl}/login/oauth/access_token`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Accept: "application/json" },
+                    body: JSON.stringify({
+                      client_id: CONFIG.clientId,
+                      device_code: deviceCode.device_code,
+                      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+                    }),
+                  });
+                  if (!res.ok) throw new Error(`relay:Token poll failed (${res.status})`);
+                  const body = await res.json();
+                  if (body.access_token) return body.access_token;
+                  switch (body.error) {
+                    case "authorization_pending": continue;
+                    case "slow_down": intervalMs += 5000; continue;
+                    case "expired_token": throw new Error("expired:Device code expired");
+                    case "access_denied": throw new Error("denied:Access denied");
+                    default: throw new Error(`relay:${body.error_description || "Unknown device flow error"}`);
+                  }
+                }
+                throw new Error("expired:Device code expired");
+              }
+
+              async fetchAuthenticatedUser(accessToken) {
+                const res = await fetch("https://api.github.com/user", {
+                  headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/vnd.github+json" },
+                });
+                if (!res.ok) throw new Error(`relay:Failed to fetch user profile (${res.status})`);
+                const body = await res.json();
+                return { login: body.login, name: body.name || null, avatarUrl: body.avatar_url, accessToken };
+              }
+
+              async verifyToken(accessToken) {
+                const res = await fetch("https://api.github.com/user", {
+                  headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                return res.ok;
+              }
+
+              toAuthError(err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (msg.startsWith("denied:")) return { reason: AuthErrorReason.AccessDenied, message: "Sign-in was cancelled or denied." };
+                if (msg.startsWith("expired:")) return { reason: AuthErrorReason.Expired, message: "The login code expired. Please try again." };
+                if (msg.startsWith("relay:")) return { reason: AuthErrorReason.RelayUnavailable, message: msg.slice(6) };
+                if (err instanceof TypeError) return { reason: AuthErrorReason.NetworkError, message: "Network error contacting GitHub." };
+                return { reason: AuthErrorReason.Unknown, message: msg };
+              }
+            }
+
+            function sleep(ms, signal) {
+              return new Promise((resolve, reject) => {
+                const t = setTimeout(resolve, ms);
+                signal.addEventListener("abort", () => {
+                  clearTimeout(t);
+                  reject(new DOMException("Login cancelled", "AbortError"));
+                }, { once: true });
+              });
+            }
+
+            // =====================================================================
+            // STORAGE
+            // =====================================================================
+            const CardStatus = { Backlog: "backlog", InProgress: "in-progress", Blocked: "blocked", Done: "done" };
+            const StorageProviderKind = { GitHub: "github", LocalFolder: "local-folder" };
+            const GAMEJAM_DIR = ".gamejam";
+
+            class StorageConflictError extends Error {
+              constructor(path, localRevision, remoteRevision) {
+                super(`Conflict writing ${path}: local revision ${localRevision} is stale (remote is ${remoteRevision})`);
+                this.name = "StorageConflictError";
+                this.path = path;
+                this.localRevision = localRevision;
+                this.remoteRevision = remoteRevision;
+              }
+            }
+
+            class GitHubStorage {
+              kind = StorageProviderKind.GitHub;
+              constructor(accessToken) {
+                this.accessToken = accessToken;
+              }
+
+              authHeaders(extra = {}) {
+                return { Authorization: `Bearer ${this.accessToken}`, Accept: "application/vnd.github+json", ...extra };
+              }
+
+              async listUserRepos() {
+                const res = await fetch(
+                  "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator",
+                  { headers: this.authHeaders() },
+                );
+                if (!res.ok) throw new Error(`Failed to list repositories (${res.status})`);
+                return res.json();
+              }
+
+              async listCollaborators(repo) {
+                const res = await fetch(
+                  `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
+                  { headers: this.authHeaders() },
+                );
+                if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
+                const body = await res.json();
+                return body.map((c) => c.login);
+              }
+
+              async listCollaboratorsWithPermissions(repo) {
+                const res = await fetch(
+                  `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
+                  { headers: this.authHeaders() },
+                );
+                if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
+                const body = await res.json();
+                return body.map((c) => ({
+                  login: c.login,
+                  avatarUrl: c.avatar_url,
+                  permission: c.permissions && c.permissions.admin ? "admin" : c.permissions && c.permissions.push ? "write" : "read",
+                }));
+              }
+
+              readTeam(repo) { return this.getFile(repo, "team.json"); }
+              writeTeam(repo, data, handle) { return this.putFile(repo, "team.json", data, handle, "Sync team roster"); }
+
+              async listRecentActivity(repo, limit = 8) {
+                const res = await fetch(
+                  `https://api.github.com/repos/${repo.owner}/${repo.name}/commits?path=${GAMEJAM_DIR}&per_page=${limit}`,
+                  { headers: this.authHeaders() },
+                );
+                if (!res.ok) throw new Error(`Failed to load activity (${res.status})`);
+                const body = await res.json();
+                return body.map((c) => ({
+                  sha: c.sha,
+                  message: c.commit.message.split("\n")[0],
+                  authorLogin: c.author ? c.author.login : (c.commit.author ? c.commit.author.name : "unknown"),
+                  authorAvatarUrl: c.author ? c.author.avatar_url : null,
+                  date: c.commit.author ? c.commit.author.date : null,
+                }));
+              }
+
+              async detectProject(repo) {
+                try {
+                  await this.getFile(repo, "project.json");
+                  return true;
+                } catch (err) {
+                  if (err.status === 404) return false;
+                  throw err;
+                }
+              }
+
+              async initProject(repo, manifest) {
+                const emptyBoard = { columns: [] };
+                await this.putFile(repo, "project.json", manifest, null, "Initialize game jam planner");
+                await this.putFile(repo, "board.json", emptyBoard, null, "Initialize game jam planner");
+                await this.putFile(repo, "milestones.json", [], null, "Initialize game jam planner");
+                await this.putFile(repo, "team.json", [], null, "Initialize game jam planner");
+              }
+
+              async loadGameJamFiles(repo) {
+                const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}`;
+                const res = await fetch(url, { headers: this.authHeaders() });
+                if (!res.ok) {
+                  const err = new Error(`Failed to list ${GAMEJAM_DIR} directory (${res.status})`);
+                  err.status = res.status;
+                  throw err;
+                }
+                const items = await res.json();
+                const files = {};
+                for (const item of items) {
+                  if (item.type === "file") {
+                    const fileRes = await fetch(item.download_url);
+                    if (!fileRes.ok) continue;
+                    const text = await fileRes.text();
+                    try {
+                      files[item.name] = { data: JSON.parse(text), sha: item.sha };
+                    } catch {
+                      files[item.name] = { data: text, sha: item.sha };
+                    }
+                  } else if (item.type === "dir" && item.name === "cards") {
+                    const cardsRes = await fetch(item.url, { headers: this.authHeaders() });
+                    if (cardsRes.ok) {
+                      const cardItems = await cardsRes.json();
+                      for (const cardItem of cardItems) {
+                        if (cardItem.type === "file") {
+                          const cRes = await fetch(cardItem.download_url);
+                          if (!cRes.ok) continue;
+                          const cText = await cRes.text();
+                          try {
+                            files[`cards/${cardItem.name}`] = { data: JSON.parse(cText), sha: cardItem.sha };
+                          } catch {
+                            files[`cards/${cardItem.name}`] = { data: cText, sha: cardItem.sha };
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                return files;
+              }
+
+              async getFile(repo, relPath) {
+                const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
+                const res = await fetch(url, { headers: this.authHeaders() });
+                if (!res.ok) {
+                  const err = new Error(`Failed to read ${relPath} (${res.status})`);
+                  err.status = res.status;
+                  throw err;
+                }
+                const body = await res.json();
+                const text = decodeURIComponent(escape(atob(body.content.replace(/\n/g, ""))));
+                return { data: JSON.parse(text), handle: { revision: body.sha, path: relPath } };
+              }
+
+              async putFile(repo, relPath, data, handle, commitMessage = `Update ${relPath}`) {
+                const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
+                const jsonText = JSON.stringify(data, null, 2);
+                const encoded = btoa(unescape(encodeURIComponent(jsonText)));
+                const payload = { message: commitMessage, content: encoded };
+                if (handle && handle.revision) payload.sha = handle.revision;
+
+                const res = await fetch(url, {
+                  method: "PUT",
+                  headers: this.authHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify(payload),
+                });
+
+                if (res.status === 409 || res.status === 422) {
+                  let remoteSha = "unknown";
+                  try {
+                    const fresh = await this.getFile(repo, relPath);
+                    remoteSha = fresh.handle.revision;
+                  } catch {}
+                  throw new StorageConflictError(relPath, handle ? handle.revision : "none", remoteSha);
+                }
+
+                if (!res.ok) throw new Error(`Failed to write ${relPath} (${res.status})`);
+                const body = await res.json();
+                return { revision: body.content.sha, path: relPath };
+              }
+
+              async deleteFile(repo, relPath, handle, commitMessage = `Delete ${relPath}`) {
+                const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relPath}`;
+                const payload = { message: commitMessage, sha: handle.revision };
+
+                const res = await fetch(url, {
+                  method: "DELETE",
+                  headers: this.authHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify(payload),
+                });
+
+                if (res.status === 409 || res.status === 422) {
+                  throw new StorageConflictError(relPath, handle.revision, "unknown");
+                }
+                if (!res.ok) throw new Error(`Failed to delete ${relPath} (${res.status})`);
+              }
+            }
+
+            // =====================================================================
+            // WORKSPACE CLASS (LOCAL-FIRST STATE & SYNC MANAGEMENT)
+            // =====================================================================
+            class Workspace {
+              constructor(repo, storage) {
+                this.repo = repo;
+                this.storage = storage;
+                this.files = new Map();
+                this.shas = new Map();
+                this.dirtyFiles = new Set();
+                this.listeners = new Set();
+                this.autosaveTimer = null;
+                this.pollTimer = null;
+                this.isCheckingSync = false;
+                this.isSaving = false;
+                this.hasConflict = false;
+                this.lastError = null;
+              }
+
+              subscribe(listener) {
+                this.listeners.add(listener);
+                return () => this.listeners.delete(listener);
+              }
+
+              notify() {
+                this.listeners.forEach((l) => l());
+              }
+
+              async load() {
+                const remoteFiles = await this.storage.loadGameJamFiles(this.repo);
+                this.files.clear();
+                this.shas.clear();
+                this.dirtyFiles.clear();
+                this.hasConflict = false;
+                this.lastError = null;
+
+                for (const [path, file] of Object.entries(remoteFiles)) {
+                  this.files.set(path, file.data);
+                  this.shas.set(path, file.sha);
+                }
+                this.notify();
+              }
+
+              getProject() { return this.files.get("project.json"); }
+              getBoard() { return this.files.get("board.json") || { columns: [] }; }
+
+              getCards() {
+                const cards = [];
+                for (const [path, data] of this.files.entries()) {
+                  if (path.startsWith("cards/") && path.endsWith(".json")) {
+                    cards.push(data);
+                  }
+                }
+                return cards;
+              }
+
+              getCard(id) { return this.files.get(`cards/${id}.json`); }
+
+              setCard(card) {
+                const path = `cards/${card.id}.json`;
+                this.files.set(path, card);
+                this.dirtyFiles.add(path);
+                this.notify();
+              }
+
+              deleteCard(cardId) {
+                const path = `cards/${cardId}.json`;
+                this.files.delete(path);
+                this.dirtyFiles.add(path);
+
+                const board = this.getBoard();
+                let boardChanged = false;
+                const updatedColumns = board.columns.map((col) => {
+                  if (col.cardIds.includes(cardId)) {
+                    boardChanged = true;
+                    return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+                  }
+                  return col;
+                });
+
+                if (boardChanged) {
+                  this.files.set("board.json", { ...board, columns: updatedColumns });
+                  this.dirtyFiles.add("board.json");
+                }
+                this.notify();
+              }
+
+              moveCard(cardId, newStatus) {
+                const card = this.getCard(cardId);
+                if (!card) return;
+
+                const updatedCard = { ...card, status: newStatus, updatedAt: new Date().toISOString() };
+                this.setCard(updatedCard);
+
+                const board = this.getBoard();
+                let boardChanged = false;
+
+                const updatedColumns = board.columns.map((col) => {
+                  const hasCard = col.cardIds.includes(cardId);
+                  if (col.status === newStatus) {
+                    if (!hasCard) {
+                      boardChanged = true;
+                      return { ...col, cardIds: [...col.cardIds, cardId] };
+                    }
+                  } else {
+                    if (hasCard) {
+                      boardChanged = true;
+                      return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+                    }
+                  }
+                  return col;
+                });
+
+                if (boardChanged) {
+                  this.files.set("board.json", { ...board, columns: updatedColumns });
+                  this.dirtyFiles.add("board.json");
+                  this.notify();
+                }
+              }
+
+              async save() {
+                if (this.dirtyFiles.size === 0 || this.isSaving) return;
+                this.isSaving = true;
+                this.lastError = null;
+                this.notify();
+
+                const dirtyList = Array.from(this.dirtyFiles);
+
+                try {
+                  for (const path of dirtyList) {
+                    const data = this.files.get(path);
+                    const sha = this.shas.get(path);
+
+                    if (data === undefined) {
+                      if (sha) {
+                        await this.storage.deleteFile(this.repo, path, { revision: sha, path });
+                        this.shas.delete(path);
+                      }
+                    } else {
+                      const handle = sha ? { revision: sha, path } : null;
+                      const result = await this.storage.putFile(this.repo, path, data, handle);
+                      this.shas.set(path, result.revision);
+                    }
+                    this.dirtyFiles.delete(path);
+                  }
+                  this.hasConflict = false;
+                } catch (err) {
+                  console.error("Save error:", err);
+                  if (err instanceof StorageConflictError) {
+                    this.hasConflict = true;
+                  }
+                  this.lastError = err.message || "Failed to save changes.";
+                } finally {
+                  this.isSaving = false;
+                  this.notify();
+                }
+              }
+
+              async checkRemoteSync() {
+                if (!this.storage || !this.repo || this.isSaving || this.isCheckingSync) return;
+
+                this.isCheckingSync = true;
+                this.notify();
+
+                try {
+                  const remoteFiles = await this.storage.loadGameJamFiles(this.repo);
+                  let updatedClean = false;
+                  let conflictDetected = false;
+
+                  // Tracks files present remotely
+                  const remotePaths = new Set(Object.keys(remoteFiles));
+
+                  for (const [path, remoteFile] of Object.entries(remoteFiles)) {
+                    const localFile = this.files.get(path);
+                    const isDirty = this.dirtyFiles.has(path);
+                    const localBaseSha = this.shas.get(path);
+
+                    if (!localFile && !localBaseSha) {
+                      // Case A/B: New file added remotely (and not locally known) -> adopt
+                      this.files.set(path, remoteFile.data);
+                      this.shas.set(path, remoteFile.sha);
+                      updatedClean = true;
+                      continue;
+                    }
+
+                    if (remoteFile.sha !== localBaseSha) {
+                      if (!isDirty) {
+                        // Case B: Clean file updated remotely -> update local copy silently
+                        this.files.set(path, remoteFile.data);
+                        this.shas.set(path, remoteFile.sha);
+                        updatedClean = true;
+                      } else {
+                        // Case D: File modified remotely AND modified locally -> conflict!
+                        conflictDetected = true;
+                      }
+                    }
+                  }
+
+                  // Check for clean files deleted remotely
+                  for (const path of Array.from(this.files.keys())) {
+                    if (!remotePaths.has(path)) {
+                      if (!this.dirtyFiles.has(path)) {
+                        this.files.delete(path);
+                        this.shas.delete(path);
+                        updatedClean = true;
+                      } else {
+                        conflictDetected = true;
+                      }
+                    }
+                  }
+
+                  if (conflictDetected) {
+                    this.hasConflict = true;
+                  }
+
+                  if (updatedClean || conflictDetected) {
+                    this.notify();
+                  }
+                } catch (err) {
+                  console.warn("Background polling check failed:", err);
+                } finally {
+                  this.isCheckingSync = false;
+                  this.notify();
+                }
+              }
+
+              startAutosave(intervalMs = 5000) {
+                this.stopAutosave();
+                this.autosaveTimer = setInterval(() => {
+                  if (this.dirtyFiles.size > 0 && !this.hasConflict) {
+                    this.save();
+                  }
+                }, intervalMs);
+              }
+
+              stopAutosave() {
+                if (this.autosaveTimer) clearInterval(this.autosaveTimer);
+                this.autosaveTimer = null;
+              }
+
+              startPolling(intervalMs = 30000) {
+                this.stopPolling();
+                this.pollTimer = setInterval(() => this.checkRemoteSync(), intervalMs);
+              }
+
+              stopPolling() {
+                if (this.pollTimer) clearInterval(this.pollTimer);
+                this.pollTimer = null;
+              }
+            }
+
+            function useWorkspace(repo, storage) {
+              const [ws, setWs] = React.useState(null);
+              const [loading, setLoading] = React.useState(true);
+              const [, setTick] = React.useState(0);
+
+              React.useEffect(() => {
+                let active = true;
+                const workspace = new Workspace(repo, storage);
+                workspace.load().then(() => {
+                  if (active) {
+                    setWs(workspace);
+                    setLoading(false);
+                  }
+                });
+
+                return () => {
+                  active = false;
+                  workspace.stopAutosave();
+                  workspace.stopPolling();
+                };
+              }, [repo.owner, repo.name, storage]);
+
+              React.useEffect(() => {
+                if (!ws) return;
+                const unsub = ws.subscribe(() => setTick((t) => t + 1));
+                ws.startAutosave(5000);
+                ws.startPolling(30000);
+
+                return () => {
+                  unsub();
+                  ws.stopAutosave();
+                  ws.stopPolling();
+                };
+              }, [ws]);
+
+              return { ws, loading };
+            }
+
+            // =====================================================================
+            // UI: SPEECH-TO-TEXT HOOK
+            // =====================================================================
+            function useSpeechToText() {
+              const [isListening, setIsListening] = React.useState(false);
+              const [transcript, setTranscript] = React.useState("");
+              const [interimTranscript, setInterimTranscript] = React.useState("");
+              const [error, setError] = React.useState(null);
+
+              const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+              const isSupported = Boolean(SpeechRecognition);
+
+              const recognitionRef = React.useRef(null);
+
+              const startListening = React.useCallback(() => {
+                if (!isSupported) {
+                  setError("Speech recognition is not supported in this browser.");
+                  return;
+                }
+                setError(null);
+                setTranscript("");
+                setInterimTranscript("");
+
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = "en-US";
+
+                recognition.onresult = (event) => {
+                  let finalAcc = "";
+                  let interimAcc = "";
+                  for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const text = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                      finalAcc += text + " ";
+                    } else {
+                      interimAcc += text;
+                    }
+                  }
+                  if (finalAcc) setTranscript((prev) => (prev ? `${prev} ${finalAcc}` : finalAcc).trim());
+                  setInterimTranscript(interimAcc);
+                };
+
+                recognition.onerror = (event) => {
+                  setError(`Speech recognition error: ${event.error}`);
+                  setIsListening(false);
+                };
+
+                recognition.onend = () => {
+                  setIsListening(false);
+                  setInterimTranscript("");
+                };
+
+                recognitionRef.current = recognition;
+                recognition.start();
+                setIsListening(true);
+              }, [isSupported, SpeechRecognition]);
+
+              const stopListening = React.useCallback(() => {
+                if (recognitionRef.current) {
+                  recognitionRef.current.stop();
+                }
+              }, []);
+
+              return { isSupported, isListening, transcript, interimTranscript, error, startListening, stopListening };
+            }
+
+            // =====================================================================
+            // UI: COMPONENTS
+            // =====================================================================
+
+            function Header({ user, repo, onLogout, onBack, ws }) {
+              const isDirty = ws ? ws.dirtyFiles.size > 0 : false;
+              const isSaving = ws ? ws.isSaving : false;
+              const hasConflict = ws ? ws.hasConflict : false;
+              const isCheckingSync = ws ? ws.isCheckingSync : false;
+
+              return (
+                <header style={{ borderBottom: "1px solid var(--panel-border)", paddingBottom: "16px", marginBottom: "20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {onBack && (
+                        <button onClick={onBack} style={{ padding: "6px 12px", fontSize: "12px" }}>
+                          &larr; Switch Repo
+                        </button>
+                      )}
+                      <div>
+                        <h1 style={{ fontSize: "18px", margin: 0 }}>{repo ? repo.name : "Game Jam Planner"}</h1>
+                        {repo && <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>{repo.owner}</div>}
+                      </div>
+                    </div>
+
+                    {ws && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div className="sync-indicator">
+                          <span className={`sync-dot ${isCheckingSync ? "checking" : ""}`}></span>
+                          <span>{isCheckingSync ? "Syncing..." : isDirty ? "Unsaved changes" : "Synced"}</span>
+                        </div>
+
+                        <button
+                          onClick={() => ws.save()}
+                          disabled={!isDirty || isSaving || hasConflict}
+                          className={isDirty && !hasConflict ? "btn-primary" : ""}
+                          style={{ width: "auto", padding: "6px 16px", fontSize: "13px" }}
+                        >
+                          {isSaving ? "Saving..." : "Save Now"}
+                        </button>
+                      </div>
+                    )}
+
+                    {user && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <img src={user.avatarUrl} alt={user.login} style={{ width: "28px", height: "28px", borderRadius: "50%" }} />
+                        <span style={{ fontSize: "13px", fontWeight: "500" }}>{user.login}</span>
+                        <button onClick={onLogout} style={{ padding: "4px 8px", fontSize: "12px" }}>Log out</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {hasConflict && (
+                    <div className="error-box" style={{ marginTop: "16px", marginBottom: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span><strong>Conflict Detected:</strong> Remote changes overlap with local edits. Please reload to sync latest state.</span>
+                      <button onClick={() => ws.load()} style={{ fontSize: "12px", padding: "4px 10px", backgroundColor: "var(--danger)", color: "#fff", border: "none" }}>
+                        Reload Workspace
+                      </button>
+                    </div>
+                  )}
+                </header>
+              );
+            }
+
+            function AuthGate({ auth, children }) {
+              const [state, setState] = React.useState(auth.state);
+
+              React.useEffect(() => {
+                const unsub = auth.onStateChange(setState);
+                auth.restoreSession();
+                return unsub;
+              }, [auth]);
+
+              if (state.status === AuthStatus.SignedIn) {
+                return children(state.user);
+              }
+
+              return (
+                <div className="card">
+                  <h1 className="title">Game Jam Planner</h1>
+                  <p className="subtitle">GitHub-backed local-first planner</p>
+
+                  {state.status === AuthStatus.SignedOut && (
+                    <button className="btn-primary" onClick={() => auth.login()}>
+                      Sign in with GitHub
+                    </button>
+                  )}
+
+                  {state.status === AuthStatus.AwaitingDeviceCode && (
+                    <div className="status-line">
+                      <div className="spinner"></div>
+                      <span>Requesting device code...</span>
+                    </div>
+                  )}
+
+      {state.status === AuthStatus.AwaitingUserVerification && (
+        <div>
+          <p style={{ fontSize: "13px", color: "var(--text-dim)", margin: 0 }}>
+            Enter this code on GitHub to authorize:
+          </p>
+
+          {/* --- Copy Code Container --- */}
+          <div className="device-code-row">
+            <div className="device-code">{state.userCode}</div>
+            <button
+              type="button"
+              className="copy-code-btn"
+              onClick={() => {
+                navigator.clipboard.writeText(state.userCode);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? "✓ Copied" : "📋 Copy"}
+            </button>
+          </div>
+
+          <a
+            href={state.verificationUriComplete}
+            target="_blank"
+            rel="noreferrer"
+            className="verify-link"
+            style={{ display: "block", textAlign: "center", fontSize: "14px", fontWeight: "600", marginBottom: "16px" }}
+          >
+            Open GitHub Verification Page &rarr;
+          </a>
+          <div className="status-line" style={{ justifyContent: "center" }}>
+            <div className="spinner"></div>
+            <span>Waiting for authorization...</span>
+          </div>
+        </div>
+      )}
+                  {state.status === AuthStatus.Error && (
+                    <div>
+                      <div className="error-box">{state.error?.message || "Authentication failed."}</div>
+                      <button className="btn-primary" onClick={() => auth.login()}>
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            function RepoPicker({ storage, onSelectRepo, onLogout }) {
+              const [repos, setRepos] = React.useState([]);
+              const [loading, setLoading] = React.useState(true);
+              const [error, setError] = React.useState(null);
+
+              React.useEffect(() => {
+                storage
+                  .listUserRepos()
+                  .then((res) => {
+                    setRepos(res);
+                    setLoading(false);
+                  })
+                  .catch((err) => {
+                    setError(err.message || "Failed to load repos");
+                    setLoading(false);
+                  });
+              }, [storage]);
+
+              if (loading) {
+                return (
+                  <div className="card">
+                    <div className="status-line">
+                      <div className="spinner"></div>
+                      <span>Loading repositories...</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="card">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                    <h2 className="title" style={{ fontSize: "16px" }}>Select a Repository</h2>
+                    <button onClick={onLogout} className="link-btn">Log out</button>
+                  </div>
+                  {error && <div className="error-box">{error}</div>}
+                  <ul className="repo-list">
+                    {repos.map((r) => (
+                      <li key={r.id} className="repo-item" onClick={() => onSelectRepo(r)}>
+                        <div>
+                          <div className="repo-name">{r.full_name}</div>
+                          <div className="repo-meta">Updated {new Date(r.updated_at).toLocaleDateString()}</div>
+                        </div>
+                        {r.private && <span className="badge">Private</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            }
+
+            function ProjectGate({ repo, storage, onBack }) {
+              const [hasProject, setHasProject] = React.useState(null);
+              const [loading, setLoading] = React.useState(true);
+              const [error, setError] = React.useState(null);
+
+              // Wizard form
+              const [jam, setJam] = React.useState("");
+              const [theme, setTheme] = React.useState("");
+              const [initializing, setInitializing] = React.useState(false);
+
+              React.useEffect(() => {
+                storage
+                  .detectProject(repo)
+                  .then((exists) => {
+                    setHasProject(exists);
+                    setLoading(false);
+                  })
+                  .catch((err) => {
+                    setError(err.message || "Failed to check repo");
+                    setLoading(false);
+                  });
+              }, [repo, storage]);
+
+              const handleInit = async (e) => {
+                e.preventDefault();
+                setInitializing(true);
+                try {
+                  const manifest = {
+                    id: repo.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
+                    name: repo.name,
+                    description: "",
+                    jam: jam || "Game Jam",
+                    theme: theme || "TBD",
+                    createdAt: new Date().toISOString(),
+                    storage: { kind: StorageProviderKind.GitHub, githubOwner: repo.owner, githubRepo: repo.name },
+                  };
+                  await storage.initProject(repo, manifest);
+                  setHasProject(true);
+                } catch (err) {
+                  setError(err.message || "Failed to initialize project");
+                } finally {
+                  setInitializing(false);
+                }
+              };
+
+              if (loading) {
+                return (
+                  <div className="card">
+                    <div className="status-line">
+                      <div className="spinner"></div>
+                      <span>Checking repository for Game Jam Planner files...</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (hasProject) {
+                return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
+              }
+
+              return (
+                <div className="card">
+                  <div className="breadcrumb">
+                    <button onClick={onBack}>&larr; Repos</button>
+                    <span>{repo.full_name}</span>
+                  </div>
+                  <h2 className="title">Initialize Game Jam Planner</h2>
+                  <p className="subtitle">No `.gamejam/` config found in this repo. Initialize it to start planning.</p>
+                  {error && <div className="error-box">{error}</div>}
+                  <form onSubmit={handleInit}>
+                    <div className="field">
+                      <label>Jam Name</label>
+                      <input type="text" placeholder="e.g. Ludum Dare 55" value={jam} onChange={(e) => setJam(e.target.value)} required />
+                    </div>
+                    <div className="field">
+                      <label>Theme</label>
+                      <input type="text" placeholder="e.g. Summoning" value={theme} onChange={(e) => setTheme(e.target.value)} required />
+                    </div>
+                    <button type="submit" className="btn-primary" disabled={initializing}>
+                      {initializing ? "Initializing .gamejam/..." : "Initialize Project"}
+                    </button>
+                  </form>
+                </div>
+              );
+            }
+
+            function CardEditModal({ card, collaborators, onSave, onDelete, onClose }) {
+              const [title, setTitle] = React.useState(card ? card.title : "");
+              const [description, setDescription] = React.useState(card ? card.description || "" : "");
+              const [status, setStatus] = React.useState(card ? card.status : CardStatus.Backlog);
+              const [tag, setTag] = React.useState(card && card.tags ? card.tags[0] || "" : "");
+              const [assignee, setAssignee] = React.useState(card ? card.assignee || "" : "");
+
+              const titleSTT = useSpeechToText();
+              const descSTT = useSpeechToText();
+
+              React.useEffect(() => {
+                if (titleSTT.transcript) setTitle((prev) => (prev ? `${prev} ${titleSTT.transcript}` : titleSTT.transcript));
+              }, [titleSTT.transcript]);
+
+              React.useEffect(() => {
+                if (descSTT.transcript) setDescription((prev) => (prev ? `${prev} ${descSTT.transcript}` : descSTT.transcript));
+              }, [descSTT.transcript]);
+
+              const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!title.trim()) return;
+                const updatedCard = {
+                  id: card ? card.id : `card-${Date.now()}`,
+                  title: title.trim(),
+                  description: description.trim(),
+                  status,
+                  tags: tag.trim() ? [tag.trim()] : [],
+                  assignee: assignee || null,
+                  createdAt: card ? card.createdAt : new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+                onSave(updatedCard);
+              };
+
+              return (
+                <div className="modal-overlay" onClick={onClose}>
+                  <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <h2 className="title" style={{ fontSize: "16px", margin: 0 }}>
+                        {card ? "Edit Card" : "New Card"}
+                      </h2>
+                      <button className="modal-close" onClick={onClose}>&times;</button>
+                    </div>
+
+                    <form onSubmit={handleSubmit}>
+                      <div className="field">
+                        <div className="field-header">
+                          <label>Title</label>
+                          {titleSTT.isSupported && (
+                            <button
+                              type="button"
+                              className={`mic-button ${titleSTT.isListening ? "listening" : ""}`}
+                              onClick={titleSTT.isListening ? titleSTT.stopListening : titleSTT.startListening}
+                              title={titleSTT.isListening ? "Stop listening" : "Dictate title"}
+                            >
+                              🎤
+                            </button>
+                          )}
+                        </div>
+                        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Card title" required />
+                        {titleSTT.interimTranscript && <div className="interim-text">{titleSTT.interimTranscript}</div>}
+                        {titleSTT.error && <div className="speech-error">{titleSTT.error}</div>}
+                      </div>
+
+                      <div className="field">
+                        <div className="field-header">
+                          <label>Description</label>
+                          {descSTT.isSupported && (
+                            <button
+                              type="button"
+                              className={`mic-button ${descSTT.isListening ? "listening" : ""}`}
+                              onClick={descSTT.isListening ? descSTT.stopListening : descSTT.startListening}
+                              title={descSTT.isListening ? "Stop listening" : "Dictate description"}
+                            >
+                              🎤
+                            </button>
+                          )}
+                        </div>
+                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Card details..." />
+                        {descSTT.interimTranscript && <div className="interim-text">{descSTT.interimTranscript}</div>}
+                        {descSTT.error && <div className="speech-error">{descSTT.error}</div>}
+                      </div>
+
+                      <div className="row-2">
+                        <div className="field">
+                          <label>Status</label>
+                          <select className="status-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                            <option value={CardStatus.Backlog}>Backlog</option>
+                            <option value={CardStatus.InProgress}>In Progress</option>
+                            <option value={CardStatus.Blocked}>Blocked</option>
+                            <option value={CardStatus.Done}>Done</option>
+                          </select>
+                        </div>
+
+                        <div className="field">
+                          <label>Tag</label>
+                          <input type="text" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. Audio, Code" />
+                        </div>
+                      </div>
+
+                      <div className="field">
+                        <label>Assignee</label>
+                        <select className="status-select" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                          <option value="">Unassigned</option>
+                          {collaborators.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="modal-footer">
+                        {card && onDelete ? (
+                          <button type="button" className="btn-danger-text" onClick={() => onDelete(card.id)}>
+                            Delete Card
+                          </button>
+                        ) : <div />}
+                        <button type="submit" className="btn-primary">Save Card</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              );
+            }
+
+            function BoardView({ ws, storage, repo }) {
+              const [editingCard, setEditingCard] = React.useState(null);
+              const [isNewCardOpen, setIsNewCardOpen] = React.useState(false);
+              const [collaborators, setCollaborators] = React.useState([]);
+              const [draggedCardId, setDraggedCardId] = React.useState(null);
+              const [dragOverCol, setDragOverCol] = React.useState(null);
+
+              const project = ws.getProject();
+              const cards = ws.getCards();
+
+              React.useEffect(() => {
+                storage.listCollaborators(repo).then(setCollaborators).catch(() => {});
+              }, [storage, repo]);
+
+              const columns = [
+                { id: CardStatus.Backlog, title: "Backlog" },
+                { id: CardStatus.InProgress, title: "In Progress" },
+                { id: CardStatus.Blocked, title: "Blocked" },
+                { id: CardStatus.Done, title: "Done" },
+              ];
+
+              const getCardsByStatus = (status) => cards.filter((c) => c.status === status);
+
+              const handleSaveCard = (card) => {
+                ws.setCard(card);
+                setEditingCard(null);
+                setIsNewCardOpen(false);
+              };
+
+              const handleDeleteCard = (cardId) => {
+                ws.deleteCard(cardId);
+                setEditingCard(null);
+              };
+
+              const handleDragStart = (e, cardId) => {
+                e.dataTransfer.setData("text/plain", cardId);
+                setDraggedCardId(cardId);
+              };
+
+              const handleDragOver = (e, colId) => {
+                e.preventDefault();
+                setDragOverCol(colId);
+              };
+
+              const handleDragLeave = (e, colId) => {
+                if (dragOverCol === colId) setDragOverCol(null);
+              };
+
+              const handleDrop = (e, colId) => {
+                e.preventDefault();
+                const cardId = e.dataTransfer.getData("text/plain") || draggedCardId;
+                if (cardId) {
+                  ws.moveCard(cardId, colId);
+                }
+                setDraggedCardId(null);
+                setDragOverCol(null);
+              };
+
+              return (
+                <div>
+                  <div className="board-topbar">
+                    <div>
+                      <h2 className="title" style={{ fontSize: "20px" }}>{project ? project.name : "Board"}</h2>
+                      <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                        {project ? `${project.jam} • Theme: ${project.theme}` : ""}
+                      </div>
+                    </div>
+                    <div className="board-topbar-actions">
+                      <button className="btn-primary" onClick={() => setIsNewCardOpen(true)}>+ Add Card</button>
+                    </div>
+                  </div>
+
+                  <div className="board-columns">
+                    {columns.map((col) => {
+                      const colCards = getCardsByStatus(col.id);
+                      const isOver = dragOverCol === col.id;
+                      return (
+                        <div
+                          key={col.id}
+                          className={`board-column ${isOver ? "drag-over" : ""}`}
+                          onDragOver={(e) => handleDragOver(e, col.id)}
+                          onDragLeave={(e) => handleDragLeave(e, col.id)}
+                          onDrop={(e) => handleDrop(e, col.id)}
+                        >
+                          <div className="board-column-header">
+                            <span>{col.title}</span>
+                            <span className="board-column-count">{colCards.length}</span>
+                          </div>
+
+                          <div className="board-column-cards">
+                            {colCards.map((card) => (
+                              <div
+                                key={card.id}
+                                className={`board-card board-card--${card.status} ${draggedCardId === card.id ? "dragging" : ""}`}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, card.id)}
+                                onClick={() => setEditingCard(card)}
+                              >
+                                <div className="card-meta-row">
+                                  {card.tags && card.tags.length > 0 && <span className="tag-pill">{card.tags[0]}</span>}
+                                  {card.assignee && (
+                                    <div className="avatar-badge" title={`Assigned to ${card.assignee}`}>
+                                      {card.assignee.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="board-card-title">{card.title}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {(editingCard || isNewCardOpen) && (
+                    <CardEditModal
+                      card={editingCard}
+                      collaborators={collaborators}
+                      onSave={handleSaveCard}
+                      onDelete={editingCard ? handleDeleteCard : null}
+                      onClose={() => {
+                        setEditingCard(null);
+                        setIsNewCardOpen(false);
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            }
+
+            function DashboardView({ ws, storage, repo }) {
+              const [activity, setActivity] = React.useState([]);
+              const [team, setTeam] = React.useState([]);
+              const [loading, setLoading] = React.useState(true);
+
+              const project = ws.getProject();
+              const cards = ws.getCards();
+
+              const total = cards.length;
+              const done = cards.filter((c) => c.status === CardStatus.Done).length;
+              const inProgress = cards.filter((c) => c.status === CardStatus.InProgress).length;
+              const blocked = cards.filter((c) => c.status === CardStatus.Blocked).length;
+
+              React.useEffect(() => {
+                let active = true;
+                Promise.all([
+                  storage.listRecentActivity(repo),
+                  storage.listCollaboratorsWithPermissions(repo),
+                ])
+                  .then(([act, tm]) => {
+                    if (active) {
+                      setActivity(act);
+                      setTeam(tm);
+                      setLoading(false);
+                    }
+                  })
+                  .catch(() => {
+                    if (active) setLoading(false);
+                  });
+                return () => { active = false; };
+              }, [storage, repo]);
+
+              return (
+                <div>
+                  <div style={{ marginBottom: "20px" }}>
+                    <h2 className="title" style={{ fontSize: "20px" }}>{project ? project.name : "Dashboard"}</h2>
+                    <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                      {project ? `${project.jam} • Theme: ${project.theme}` : ""}
+                    </div>
+                  </div>
+
+                  <div className="dashboard-grid">
+                    <div className="dashboard-stat">
+                      <div className="stat-value">{total}</div>
+                      <div className="stat-label">Total Cards</div>
+                    </div>
+                    <div className="dashboard-stat">
+                      <div className="stat-value" style={{ color: "#60a5fa" }}>{inProgress}</div>
+                      <div className="stat-label">In Progress</div>
+                    </div>
+                    <div className="dashboard-stat">
+                      <div className="stat-value" style={{ color: "var(--danger)" }}>{blocked}</div>
+                      <div className="stat-label">Blocked</div>
+                    </div>
+                    <div className="dashboard-stat">
+                      <div className="stat-value" style={{ color: "var(--accent)" }}>{done}</div>
+                      <div className="stat-label">Completed</div>
+                    </div>
+                  </div>
+
+                  <div className="dashboard-columns">
+                    <div className="dashboard-panel">
+                      <h3>Recent Activity</h3>
+                      {loading ? (
+                        <div className="status-line"><div className="spinner"></div><span>Loading activity...</span></div>
+                      ) : activity.length === 0 ? (
+                        <div className="empty-state">No recent activity</div>
+                      ) : (
+                        activity.map((a) => (
+                          <div key={a.sha} className="activity-item">
+                            {a.authorAvatarUrl && <img src={a.authorAvatarUrl} alt={a.authorLogin} />}
+                            <div>
+                              <div className="activity-message">{a.message}</div>
+                              <div className="activity-meta">
+                                {a.authorLogin} • {a.date ? new Date(a.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="dashboard-panel">
+                      <h3>Team Members</h3>
+                      {loading ? (
+                        <div className="status-line"><div className="spinner"></div><span>Loading team...</span></div>
+                      ) : team.length === 0 ? (
+                        <div className="empty-state">No team members found</div>
+                      ) : (
+                        team.map((m) => (
+                          <div key={m.login} className="team-row">
+                            <img src={m.avatarUrl} alt={m.login} />
+                            <span className="team-login">{m.login}</span>
+                            <span className="badge">{m.permission}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            function TeamView({ storage, repo }) {
+              const [team, setTeam] = React.useState([]);
+              const [loading, setLoading] = React.useState(true);
+              const [error, setError] = React.useState(null);
+
+              React.useEffect(() => {
+                storage
+                  .listCollaboratorsWithPermissions(repo)
+                  .then((res) => {
+                    setTeam(res);
+                    setLoading(false);
+                  })
+                  .catch((err) => {
+                    setError(err.message || "Failed to load team");
+                    setLoading(false);
+                  });
+              }, [storage, repo]);
+
+              if (loading) {
+                return (
+                  <div className="status-line">
+                    <div className="spinner"></div>
+                    <span>Loading team members...</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div>
+                  <h2 className="title" style={{ fontSize: "20px", marginBottom: "16px" }}>Team Collaborators</h2>
+                  {error && <div className="error-box">{error}</div>}
+                  <div className="dashboard-panel">
+                    {team.map((m) => (
+                      <div key={m.login} className="team-row" style={{ padding: "12px 0" }}>
+                        <img src={m.avatarUrl} alt={m.login} style={{ width: "36px", height: "36px" }} />
+                        <div>
+                          <div style={{ fontWeight: "600", fontSize: "14px" }}>{m.login}</div>
+                          <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>Repository Collaborator</div>
+                        </div>
+                        <span className="badge" style={{ fontSize: "12px", padding: "4px 10px" }}>{m.permission}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
+            function ProjectShell({ repo, storage, onBack }) {
+              const { ws, loading } = useWorkspace(repo, storage);
+              const [activeTab, setActiveTab] = React.useState("board");
+
+              if (loading || !ws) {
+                return (
+                  <div className="card">
+                    <div className="status-line">
+                      <div className="spinner"></div>
+                      <span>Syncing workspace files with GitHub...</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ width: "100%", maxWidth: "960px", margin: "0 auto" }}>
+                  <Header repo={repo} ws={ws} onBack={onBack} />
+
+                  <div className="view-tabs">
+                    <button className={activeTab === "board" ? "active" : ""} onClick={() => setActiveTab("board")}>
+                      Kanban Board
+                    </button>
+                    <button className={activeTab === "dashboard" ? "active" : ""} onClick={() => setActiveTab("dashboard")}>
+                      Dashboard
+                    </button>
+                    <button className={activeTab === "team" ? "active" : ""} onClick={() => setActiveTab("team")}>
+                      Team
+                    </button>
+                  </div>
+
+                  {activeTab === "board" && <BoardView ws={ws} storage={storage} repo={repo} />}
+                  {activeTab === "dashboard" && <DashboardView ws={ws} storage={storage} repo={repo} />}
+                  {activeTab === "team" && <TeamView storage={storage} repo={repo} />}
+                </div>
+              );
+            }
+
+            function App() {
+              const auth = React.useMemo(() => new GitHubDeviceFlowAuth(), []);
+              const [selectedRepo, setSelectedRepo] = React.useState(null);
+
+              return (
+                <AuthGate auth={auth}>
+                  {(user) => {
+                    const storage = new GitHubStorage(user.accessToken);
+
+                    if (!selectedRepo) {
+                      return (
+                        <RepoPicker
+                          storage={storage}
+                          onLogout={() => auth.logout()}
+                          onSelectRepo={(repo) => setSelectedRepo({
+                            owner: repo.owner.login,
+                            name: repo.name,
+                            full_name: repo.full_name,
+                          })}
+                        />
+                      );
+                    }
+
+                    return <ProjectGate repo={selectedRepo} storage={storage} onBack={() => setSelectedRepo(null)} />;
+                  }}
+                </AuthGate>
+              );
+            }
+
+            const root = ReactDOM.createRoot(document.getElementById("root"));
+            root.render(<App />);
+    </script>
+
+    <script>
+      const source = document.getElementById("app-source").textContent;
+      const { code } = Babel.transform(source, {
+        presets: [["react", { runtime: "classic" }]],
+      });
+      const script = document.createElement("script");
+      script.textContent = code;
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
