@@ -363,6 +363,136 @@
       .add-card-row button {
         padding: 7px 12px;
       }
+
+      .board-column.drag-over {
+        border-color: var(--accent);
+        background: #1b1f27;
+      }
+      .board-card {
+        cursor: pointer;
+        border-left: 3px solid var(--panel-border);
+        transition:
+          opacity 0.15s,
+          border-color 0.15s,
+          transform 0.1s;
+      }
+      .board-card:hover {
+        border-color: var(--accent);
+      }
+      .board-card.dragging {
+        opacity: 0.4;
+      }
+      .board-card--backlog {
+        border-left-color: #6b7280;
+      }
+      .board-card--in-progress {
+        border-left-color: #60a5fa;
+      }
+      .board-card--blocked {
+        border-left-color: var(--danger);
+      }
+      .board-card--done {
+        border-left-color: var(--accent);
+      }
+
+      .card-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .tag-pill {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #1f232c;
+        color: var(--text-dim);
+        border: 1px solid var(--panel-border);
+      }
+      .avatar-badge {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent-dim);
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 50;
+      }
+      .modal-panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 28px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 85vh;
+        overflow-y: auto;
+      }
+      .modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 18px;
+        line-height: 1;
+        padding: 4px;
+      }
+      .modal-close:hover {
+        color: var(--text);
+        border-color: transparent;
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 20px;
+        gap: 12px;
+      }
+      .modal-footer .btn-primary {
+        width: auto;
+        padding: 10px 24px;
+      }
+      .btn-danger-text {
+        background: none;
+        border: none;
+        color: var(--danger);
+        padding: 8px 4px;
+      }
+      .btn-danger-text:hover {
+        border-color: transparent;
+        text-decoration: underline;
+      }
+      .status-select {
+        width: 100%;
+        font: inherit;
+        background: #0f1115;
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
     </style>
   </head>
   <body>
@@ -1129,9 +1259,90 @@
         }
       }
 
+      function statusAccentClass(status) {
+        switch (status) {
+          case CardStatus.Backlog: return "board-card--backlog";
+          case CardStatus.InProgress: return "board-card--in-progress";
+          case CardStatus.Blocked: return "board-card--blocked";
+          case CardStatus.Done: return "board-card--done";
+          default: return "";
+        }
+      }
+
+      function CardDetailModal({ card, onSave, onDelete, onClose }) {
+        const [title, setTitle] = useState(card.title);
+        const [description, setDescription] = useState(card.description || "");
+        const [status, setStatus] = useState(card.status);
+        const [tagsText, setTagsText] = useState((card.tags || []).join(", "));
+        const [assignee, setAssignee] = useState(card.assignee || "");
+
+        const handleSave = () => {
+          const tags = tagsText.split(",").map((t) => t.trim()).filter(Boolean);
+          onSave({
+            ...card,
+            title: title.trim() || card.title,
+            description,
+            status,
+            tags,
+            assignee: assignee.trim() || null,
+            updatedAt: new Date().toISOString(),
+          });
+        };
+
+        const handleOverlayClick = (e) => { if (e.target === e.currentTarget) onClose(); };
+
+        return (
+          <div className="modal-overlay" onClick={handleOverlayClick}>
+            <div className="modal-panel">
+              <div className="modal-header">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  style={{ font: "inherit", fontSize: 18, fontWeight: 600, background: "none", border: "none", color: "var(--text)", padding: 0, flex: 1 }}
+                />
+                <button className="modal-close" onClick={onClose} title="Close">×</button>
+              </div>
+
+              <div className="field">
+                <label>Description</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Details, acceptance criteria, notes…" style={{ minHeight: 100 }} />
+              </div>
+
+              <div className="row-2">
+                <div className="field">
+                  <label>Status</label>
+                  <select className="status-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                    {Object.values(CardStatus).map((s) => (
+                      <option key={s} value={s}>{statusLabel(s)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Assignee (GitHub login)</label>
+                  <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="e.g. octocat" />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Tags (comma-separated)</label>
+                <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="e.g. art, audio, urgent" />
+              </div>
+
+              <div className="modal-footer">
+                <button className="btn-danger-text" onClick={onDelete}>Delete card</button>
+                <button className="btn-primary" onClick={handleSave}>Save changes</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       function BoardWorkspace({ repo, storage, onBack }) {
         const { loading, error, workspace, project, dirty, saving, conflicts } = useWorkspace(storage, repo);
         const [newCardTitles, setNewCardTitles] = useState({});
+        const [draggingCardId, setDraggingCardId] = useState(null);
+        const [dragOverStatus, setDragOverStatus] = useState(null);
+        const [selectedCardId, setSelectedCardId] = useState(null);
 
         // The board needs more horizontal room than the 560px centered card
         // layout used everywhere else. Widen #root only while this component
@@ -1172,6 +1383,24 @@
           setNewCardTitles((prev) => ({ ...prev, [status]: "" }));
         };
 
+        const handleDragStart = (e, cardId) => {
+          setDraggingCardId(cardId);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", cardId); // Firefox requires data to be set for drag to start
+        };
+        const handleDragEnd = () => { setDraggingCardId(null); setDragOverStatus(null); };
+        const handleColumnDragOver = (e, status) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverStatus(status); };
+        const handleColumnDragLeave = (status) => { setDragOverStatus((current) => (current === status ? null : current)); };
+        const handleColumnDrop = (e, status) => {
+          e.preventDefault();
+          const cardId = e.dataTransfer.getData("text/plain") || draggingCardId;
+          if (cardId) workspace.moveCard(cardId, status);
+          setDraggingCardId(null);
+          setDragOverStatus(null);
+        };
+
+        const selectedCard = selectedCardId ? cards[selectedCardId] : null;
+
         return (
           <div>
             <div className="breadcrumb">
@@ -1204,7 +1433,13 @@
 
             <div className="board-columns">
               {board.columns.map((col) => (
-                <div key={col.id} className="board-column">
+                <div
+                  key={col.id}
+                  className={`board-column${dragOverStatus === col.status ? " drag-over" : ""}`}
+                  onDragOver={(e) => handleColumnDragOver(e, col.status)}
+                  onDragLeave={() => handleColumnDragLeave(col.status)}
+                  onDrop={(e) => handleColumnDrop(e, col.status)}
+                >
                   <div className="board-column-header">
                     {statusLabel(col.status)}
                     <span className="board-column-count">{col.cardIds.length}</span>
@@ -1215,12 +1450,25 @@
                       const card = cards[cardId];
                       if (!card) return null;
                       return (
-                        <div key={cardId} className="board-card">
+                        <div
+                          key={cardId}
+                          className={`board-card ${statusAccentClass(card.status)}${draggingCardId === cardId ? " dragging" : ""}`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, cardId)}
+                          onDragEnd={handleDragEnd}
+                          onClick={() => setSelectedCardId(cardId)}
+                        >
+                          {(card.tags && card.tags.length > 0) || card.assignee ? (
+                            <div className="card-meta-row">
+                              {(card.tags || []).map((tag) => <span key={tag} className="tag-pill">{tag}</span>)}
+                              {card.assignee && <span className="avatar-badge" title={card.assignee}>{card.assignee.slice(0, 2).toUpperCase()}</span>}
+                            </div>
+                          ) : null}
                           <div className="board-card-title">{card.title}</div>
                           <div className="board-card-actions">
-                            <button title="Move left" onClick={() => workspace.moveCard(cardId, prevStatus(card.status))}>◀</button>
-                            <button title="Move right" onClick={() => workspace.moveCard(cardId, nextStatus(card.status))}>▶</button>
-                            <button title="Delete" className="board-card-delete" onClick={() => workspace.deleteCard(cardId)}>×</button>
+                            <button title="Move left" onClick={(e) => { e.stopPropagation(); workspace.moveCard(cardId, prevStatus(card.status)); }}>◀</button>
+                            <button title="Move right" onClick={(e) => { e.stopPropagation(); workspace.moveCard(cardId, nextStatus(card.status)); }}>▶</button>
+                            <button title="Delete" className="board-card-delete" onClick={(e) => { e.stopPropagation(); workspace.deleteCard(cardId); }}>×</button>
                           </div>
                         </div>
                       );
@@ -1239,6 +1487,15 @@
                 </div>
               ))}
             </div>
+
+            {selectedCard && (
+              <CardDetailModal
+                card={selectedCard}
+                onClose={() => setSelectedCardId(null)}
+                onSave={(updated) => { workspace.upsertCard(updated); setSelectedCardId(null); }}
+                onDelete={() => { workspace.deleteCard(selectedCardId); setSelectedCardId(null); }}
+              />
+            )}
           </div>
         );
       }
