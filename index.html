@@ -212,9 +212,9 @@
       // =====================================================================
       // CONFIG
       // =====================================================================
-      // Fill these in once you've registered a GitHub OAuth App with Device
-      // Flow enabled (Settings > Developer settings > GitHub Apps > your app >
-      // General > Enable Device Flow). CLIENT_ID is public and safe to ship
+      // Fill these in once you've registered a classic GitHub OAuth App with
+      // Device Flow enabled (Settings > Developer settings > OAuth Apps >
+      // your app > Enable Device Flow). CLIENT_ID is public and safe to ship
       // in this file.
       //
       // RELAY_BASE_URL points at a tiny stateless CORS relay, because GitHub's
@@ -223,18 +223,13 @@
       // forwards the POST and adds `Access-Control-Allow-Origin: *` — it never
       // sees a client secret, since Device Flow doesn't use one.
       //
-      // APP_SLUG is the dash-cased name shown in your GitHub App's public URL
-      // (https://github.com/apps/<APP_SLUG>) — used to build the "install this
-      // app on more repos" link, since GitHub Apps only see repos they've been
-      // explicitly installed on.
+      // scopes: OAuth Apps (unlike GitHub Apps) DO use scopes, requested here
+      // at login time. "repo" grants read/write on private + public repos,
+      // which is what the Contents API calls need for .gamejam/*.json.
       const CONFIG = {
-        clientId: "Iv23lijW75Uw61RKbn2I",
+        clientId: "Ov23liy7kjuppgIY5yU1",
         relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
-        appSlug: "gamejamplanner",
-        // Note: GitHub Apps don't use OAuth-style scopes — permissions are
-        // configured on the app itself (Contents: Read & write, Metadata:
-        // Read-only), not requested at login time. This is sent but ignored.
-        scopes: [],
+        scopes: ["repo"],
       };
 
       // =====================================================================
@@ -439,36 +434,15 @@
         }
 
         async listUserRepos() {
-          // GitHub Apps don't have a single "list my repos" call — a user
-          // access token only sees repos on installations the user granted.
-          // So: list installations first, then repos per installation, and
-          // flatten. This replaces the old GET /user/repos approach, which
-          // only works for classic OAuth Apps with a "repo" scope, not for
-          // GitHub App user tokens.
-          const installations = await this.listInstallations();
-          const reposByInstallation = await Promise.all(
-            installations.map((installation) => this.listInstallationRepos(installation.id)),
-          );
-          return reposByInstallation.flat();
-        }
-
-        async listInstallations() {
-          const res = await fetch("https://api.github.com/user/installations?per_page=100", {
-            headers: this.authHeaders(),
-          });
-          if (!res.ok) throw new Error(`Failed to list app installations (${res.status})`);
-          const body = await res.json();
-          return body.installations || [];
-        }
-
-        async listInstallationRepos(installationId) {
+          // Classic OAuth App with "repo" scope: this single call returns
+          // every repo the user can access (owned + collaborator), no
+          // separate install step needed.
           const res = await fetch(
-            `https://api.github.com/user/installations/${installationId}/repositories?per_page=100`,
+            "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator",
             { headers: this.authHeaders() },
           );
-          if (!res.ok) throw new Error(`Failed to list repositories for installation ${installationId} (${res.status})`);
-          const body = await res.json();
-          return body.repositories || [];
+          if (!res.ok) throw new Error(`Failed to list repositories (${res.status})`);
+          return res.json();
         }
 
         async detectProject(repo) {
@@ -611,44 +585,21 @@
             {!repos && !error && <div className="status-line"><Spinner /> Loading repositories…</div>}
 
             {repos && repos.length === 0 && (
-              <div className="empty-state">
-                <p>No repositories yet — this app can only see repos it's been installed on.</p>
-                <a
-                  className="verify-link"
-                  href={`https://github.com/apps/${CONFIG.appSlug}/installations/new`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Install the app on a repository
-                </a>
-              </div>
+              <div className="empty-state">No repositories found for this account.</div>
             )}
 
             {repos && repos.length > 0 && (
-              <>
-                <ul className="repo-list">
-                  {repos.map((repo) => (
-                    <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
-                      <div>
-                        <div className="repo-name">{repo.full_name}</div>
-                        <div className="repo-meta">{repo.private ? "Private" : "Public"} · updated {new Date(repo.updated_at).toLocaleDateString()}</div>
-                      </div>
-                      <span className="badge">{repo.permissions && repo.permissions.admin ? "admin" : repo.permissions && repo.permissions.push ? "write" : "read"}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p style={{ textAlign: "center", marginTop: 12 }}>
-                  <a
-                    className="verify-link"
-                    style={{ fontSize: 12 }}
-                    href={`https://github.com/apps/${CONFIG.appSlug}/installations/new`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Don't see a repo? Manage app installations
-                  </a>
-                </p>
-              </>
+              <ul className="repo-list">
+                {repos.map((repo) => (
+                  <li key={repo.id} className="repo-item" onClick={() => onSelectRepo(repo)}>
+                    <div>
+                      <div className="repo-name">{repo.full_name}</div>
+                      <div className="repo-meta">{repo.private ? "Private" : "Public"} · updated {new Date(repo.updated_at).toLocaleDateString()}</div>
+                    </div>
+                    <span className="badge">{repo.permissions && repo.permissions.admin ? "admin" : repo.permissions && repo.permissions.push ? "write" : "read"}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         );
