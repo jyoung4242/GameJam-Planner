@@ -1,117 +1,118 @@
 # Game Jam Planner — Handoff
 
+## Status: Kanban board MVP complete ✅
+
+Full loop works end to end: GitHub login (Device Flow) → repo picker → project init/open → Kanban board with drag-and-drop, rich cards,
+speech dictation, collaborator assignment. This is a good checkpoint — next session should pick a direction from "What's next" below
+rather than debug anything known-broken.
+
 ## Where this came from
 
 Started from `planning.md` — a GitHub-backed, local-first React SPA vision (no custom backend, GitHub as auth/persistence/collaboration
-layer, `.gamejam/` folder of JSON files as the project format).
-
-**Important correction mid-session:** this is a standalone project, not tied to ExcaliburIDE. Deliverable is a **single self-contained
-`.html` file** — no build tools, no npm, matching Justin's usual pattern (Shader Playground, SFXR generator). All architecture below
-reflects that.
+layer, `.gamejam/` folder of JSON files as the project format). Standalone project (not tied to ExcaliburIDE). Single self-contained
+`.html` file — no build tools, no npm.
 
 ## Current deliverables
 
-- **`gamejam-planner.html`** — the app itself. React 18 (UMD, CDN) + Babel Standalone (CDN) for JSX, transformed manually at load time.
-  Currently implements: GitHub Device Flow login → repo picker (via GitHub App installations). Repo selection is wired but stops there
-  — see "Next up."
-- **`gamejam-planner-auth-relay.js`** — a Cloudflare Worker. Stateless CORS relay for GitHub's device-flow endpoints (see "Key
-  technical findings" below for why this exists).
+- **`gamejam-planner.html`** — the app. React 18 (UMD, CDN) + Babel Standalone (CDN) for JSX, transformed manually at load time (see
+  "Don't re-break these" below).
+- **`gamejam-planner-auth-relay.js`** — Cloudflare Worker, deployed and live. Stateless CORS relay for GitHub's device-flow endpoints.
 
-## Key technical findings from this session
+Hosted at `https://jyoung4242.github.io/GameJam-Planner/` (must stay named `index.html` in that repo for GitHub Pages to serve it).
 
-1. **In-browser TypeScript via Babel Standalone doesn't work reliably** here — hit a hard parse error
-   (`Unexpected reserved word 'interface'`) and separately a `file://` origin warning from the ESM `data-type` attribute. Dropped TS
-   entirely; the file is plain JS now. Don't reintroduce `data-presets="react,typescript"` or `data-type="module"`.
-
-2. **Babel's default JSX runtime ("automatic") injects an `import` statement** (`import { jsx } from "react/jsx-runtime"`) regardless
-   of the `data-type` attribute, which breaks `file://` usage entirely (`Cannot use import statement outside a module`). Fix: don't let
-   Babel auto-scan `<script type="text/babel">` tags at all. Instead the app source sits in
-   `<script type="text/plain" id="app-source">` (inert to the browser), and a small bootstrap script at the bottom manually calls
-   `Babel.transform(source, { presets: [["react", { runtime: "classic" }]] })` and injects the result as a real `<script>`. This forces
-   classic `React.createElement` calls, no imports. **Any future edit to the app code must stay inside that `#app-source` block**, not
-   a live `text/babel` tag.
-
-3. **GitHub's device-flow endpoints don't support CORS** (`/login/device/ code` and `/login/oauth/access_token`) — confirmed against
-   current GitHub docs and multiple corroborating issues. A browser can't call them directly no matter how the auth flow is shaped.
-   Device Flow doesn't need a client secret though (only `client_id`), so the relay that works around this is genuinely stateless — no
-   secrets, just a CORS-adding pass-through. That's `gamejam-planner-auth-relay.js`.
-
-4. **This ended up registered as a GitHub App, not a classic OAuth App** (client ID `Iv23lijW75Uw61RKbn2I` confirms it — GitHub Apps
-   use `Iv1.`/`Ov23li`-style client IDs; OAuth Apps use a 20-char hex string). This has real consequences, already reflected in the
-   code:
-   - No OAuth-style scopes — permissions are configured on the app itself (**Contents: Read & write**, **Metadata: Read-only** —
-     confirm these are set under Permissions & webhooks).
-   - `GET /user/repos` does **not** reliably return a GitHub App's accessible repos. The correct flow is `GET /user/installations` →
-     `GET /user/installations/{id}/repositories`, flattened. Already implemented in `GitHubStorage.listUserRepos()`.
-   - The app only sees repos it's been **installed** on. The UI has an "Install the app on a repository" link
-     (`https://github.com/apps/{appSlug}/installations/new`) for the empty state, plus a persistent "manage installations" link once
-     repos are showing.
-
-## CONFIG values — current state
-
-In `gamejam-planner.html`, near the top of the app-source block:
+## CONFIG — fully set, confirmed working
 
 ```js
 const CONFIG = {
-  clientId: "Iv23lijW75Uw61RKbn2I", // ✅ set
-  relayBaseUrl: "https://your-relay.example.workers.dev", // ❌ placeholder — needs the deployed Worker URL
-  appSlug: "YOUR_APP_SLUG", // ❌ placeholder — the dash-cased name from https://github.com/apps/<this>
-  scopes: [], // sent but ignored for GitHub Apps
+  clientId: "Ov23liy7kjuppgIY5yU1", // classic OAuth App, not the GitHub App from earlier
+  relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
+  scopes: ["repo"],
 };
 ```
 
-## GitHub App settings checklist
+**This is a classic OAuth App**, not the GitHub App (`gamejamplanner`) registered earlier in the project — that one hit an unresolved
+404 on its install-app flow (possibly a known GitHub-side bug) and was abandoned in favor of OAuth App, which needs no install step at
+all. The old GitHub App can be deleted from Settings → Developer settings → GitHub Apps if you want to tidy up, or left alone — it's
+unused either way.
 
-- [x] Device Flow enabled
-- [x] Client ID obtained (`Iv23lijW75Uw61RKbn2I`)
-- [ ] Homepage URL set to `https://jyoung4242.github.io/GameJam-Planner/`
-- [ ] Authorization callback URL set to the same (ignored by device flow, but the form requires it)
-- [ ] Permissions & webhooks → Repository permissions → **Contents: Read and write**
-- [ ] Permissions & webhooks → Repository permissions → **Metadata: Read-only**
+## What's built
 
-## Relay deployment — in progress
+### Auth & repo access
 
-Was walking through deploying `gamejam-planner-auth-relay.js` to Cloudflare Workers via the dashboard (no CLI):
+- GitHub Device Flow login via the CORS relay
+- `GET /user/repos` for the repo picker (classic OAuth semantics)
+- `GET /repos/{owner}/{repo}/collaborators` for the assignee dropdown
 
-1. dash.cloudflare.com → Workers & Pages → Create → Create Worker
-2. Name it (e.g. `gamejam-planner-auth-relay`), Deploy the placeholder
-3. Edit code → paste in the relay file's contents → Deploy
-4. Copy the resulting `*.workers.dev` URL → paste into `CONFIG.relayBaseUrl`
+### Project init/open (`ProjectGate`)
 
-Also already set `ALLOWED_ORIGIN` in the relay to `https://jyoung4242.github.io` (origin only, no path) since the Pages origin is now
-known.
+- Detects `.gamejam/project.json`; if missing, shows `InitProjectForm` (name/description/jam/theme) which calls `initProject()` to
+  scaffold `project.json`, `board.json`, `milestones.json`, `team.json`, `assets.json` with an initial commit
+- If found, loads straight into the board
 
-**This step wasn't confirmed finished** — pick up here if resuming.
+### Storage layer (`GitHubStorage`)
 
-## GitHub Pages deployment note
+All methods `Workspace` needs are implemented and cross-checked against each other: `listUserRepos`, `listCollaborators`,
+`detectProject`, `initProject`, `readManifest`, `readBoard`, `listCardIds`, `readCard`, `writeCard`, `deleteCard`, `commitBatch`, plus
+low-level `getFile`/ `putFile`. Conflict detection via git blob sha — a stale sha on write comes back as 409/422, caught and converted
+to `StorageConflictError`.
 
-The HTML file must be named **`index.html`** in the repo/path that resolves to `https://jyoung4242.github.io/GameJam-Planner/`, not
-`gamejam-planner.html`, or the URL will 404.
+### Workspace layer (`Workspace` class + `useWorkspace` hook)
 
-## Next up (once login/repo-picker is verified working end to end)
+- Dirty-state tracking per file (board.json, each card)
+- Manual **Save** button (disabled when nothing's dirty) + autosave every 3 minutes if anything's dirty
+- Deletions handled separately from the batch write (Contents API delete isn't part of the batch shape)
+- **Conflict handling is minimal by design**: on a 409/422, shows a banner with a count and a "Reload" button that refetches everything
+  and discards local changes to the conflicting files. This is NOT a field-level merge — planning.md's "prompt only on genuine field
+  conflicts, auto-merge the rest" is still unbuilt. Fine for solo/small team use so far, but worth flagging if multiple people start
+  editing concurrently.
+- Auto-seeds four default columns (Backlog/In Progress/Blocked/Done) on first load of an empty board
 
-The `App` component currently stops after repo selection with a stub:
+### Kanban board (`BoardWorkspace`)
 
-```js
-// Next step: detectProject() -> either open the existing .gamejam/
-// workspace or offer to initialize one, per planning.md's
-// "GitHub Flow" section.
-```
+- Four columns, add/move/delete cards
+- **Drag-and-drop** between columns (native HTML5 DnD, no library) — the ◀▶ buttons still work too, kept both intentionally
+- Column height is capped (`max(320px, 100vh - 220px)`) with its own independent scroll + themed thin scrollbar, so a column with many
+  cards doesn't blow out the page or hide the add-card row
+- Card face shows tag pills + assignee initials badge when present; status-colored left border accent per column
+- Text overflow: card titles use `overflow-wrap: anywhere` (break long unbroken strings rather than overflow); tag pills truncate with
+  ellipsis at 120px (pills are meant to stay short, full text is still editable in the modal)
 
-`GitHubStorage` already has the methods needed for this: `detectProject`, `initProject`, `readManifest`, `readBoard`, `getFile`,
-`putFile` (conflict detection via git blob sha — a stale `sha` on write comes back as 409/422 from GitHub's Contents API, caught and
-converted to `StorageConflictError`).
+### Card detail modal (`CardDetailModal`)
 
-Not yet ported into the single-file build: the **Workspace** abstraction (dirty-state tracking per file, batched autosave every few
-minutes, manual save, conflict events) that was designed earlier in the session before the pivot to single-file JS. The design is sound
-and worth reusing — dirty tracking keyed by file path/card id, `save()` batches only dirty files, autosave timer calls `save()`
-periodically — just needs to be written as plain JS inside the `#app-source` block rather than the original TS module version (which
-was deleted).
+- Edit title, description, status (dropdown), tags (comma-separated), assignee (dropdown from `listCollaborators`, with a fallback so a
+  removed collaborator's existing assignment doesn't silently vanish)
+- **Speech-to-text dictation** for the description field, via the browser's native `SpeechRecognition` API (Chrome/Edge only — Firefox/
+  Safari support is patchy/absent, gated with a disabled button + tooltip). Appends finalized speech chunks incrementally; shows a live
+  interim preview while listening; surfaces mic/permission errors inline. **Note**: if dictation shows "Listening…" but nothing is ever
+  transcribed, that's very likely a browser/OS microphone routing issue (wrong input device selected), not a bug in the app — confirmed
+  this session by reproducing the same silence on Google's own speech demo. Nothing to fix in code for that; it's an environment thing.
 
-Suggested order from here:
+## Don't re-break these (technical gotchas from earlier sessions)
 
-1. Confirm relay + full login → repo list flow works live.
-2. Wire `detectProject()` on repo selection: if `.gamejam/project.json` exists, load it; if not, prompt to initialize (per
-   planning.md's "New Project Wizard" / "GitHub Flow" sections).
-3. Port the Workspace/dirty-tracking/autosave logic into the single file.
-4. Build the actual Kanban board UI on top of that.
+1. **No TypeScript-in-Babel.** Plain JS only. Don't reintroduce `data-presets="react,typescript"`.
+2. **App code must live in `<script type="text/plain" id="app-source">`**, transformed manually via
+   `Babel.transform(source, { presets: [["react", { runtime: "classic" }]] })` at the bottom of the file — not a live
+   `<script type="text/babel">` tag. Babel's default "automatic" JSX runtime injects an `import` statement that breaks on `file://`;
+   the manual transform with `runtime: "classic"` avoids it.
+3. **GitHub's device-flow endpoints don't support CORS** — the relay Worker exists because of this, is stateless, and needs no secret.
+4. Before editing `index.html`, remember the **verification workflow** used throughout this project for every change: extract the
+   `#app-source` block, run it through the same `Babel.transform` call the browser will use, and `node --check` the output. Catches
+   syntax errors and missing-import mistakes before they reach the browser. (Node's `@babel/standalone` package was installed locally
+   in `/home/claude/gamejam-planner` for this — reinstall if starting a fresh session: `npm install --no-save @babel/standalone`.)
+
+## What's next — not yet decided, pick a direction
+
+Remaining MVP items from planning.md not yet built:
+
+- **Countdown** (to jam deadline)
+- **Milestones** (`milestones.json` is scaffolded on init but nothing reads/writes/displays it yet)
+- **Dashboard** (overview screen — currently the board is the only view)
+- **Team** (`team.json` scaffolded but unused — collaborators are fetched live from GitHub each time instead)
+- **Assets tracking** (`assets.json` scaffolded, completely unused)
+
+Long-term / stretch items from planning.md, not started: live presence, WebRTC planning sessions, AI-assisted planning, engine
+templates, Panic Mode, build checklist.
+
+Also worth considering, not in planning.md but came up naturally this session: a real field-level conflict merge (vs. the current
+reload-and-discard), card reordering within a column (currently cardIds order is preserved but nothing lets you manually reorder,
+drag-and-drop only moves between columns not within one), and card descriptions aren't previewed on the card face at all (modal-only).

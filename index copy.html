@@ -565,127 +565,6 @@
         color: var(--danger);
         margin-top: 6px;
       }
-
-      .view-tabs {
-        display: flex;
-        gap: 4px;
-        margin-bottom: 20px;
-        border-bottom: 1px solid var(--panel-border);
-      }
-      .view-tabs button {
-        background: none;
-        border: none;
-        border-radius: 0;
-        border-bottom: 2px solid transparent;
-        padding: 10px 4px;
-        margin-right: 20px;
-        color: var(--text-dim);
-        font-size: 14px;
-      }
-      .view-tabs button:hover {
-        border-color: var(--panel-border);
-        color: var(--text);
-      }
-      .view-tabs button.active {
-        color: var(--accent);
-        border-color: var(--accent);
-        font-weight: 600;
-      }
-
-      .dashboard-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 12px;
-        margin-bottom: 24px;
-      }
-      .dashboard-stat {
-        background: var(--panel);
-        border: 1px solid var(--panel-border);
-        border-radius: 12px;
-        padding: 18px;
-        text-align: center;
-      }
-      .dashboard-stat .stat-value {
-        font-size: 26px;
-        font-weight: 700;
-        color: var(--accent);
-      }
-      .dashboard-stat .stat-label {
-        font-size: 12px;
-        color: var(--text-dim);
-        margin-top: 4px;
-      }
-
-      .dashboard-columns {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-      }
-      @media (max-width: 720px) {
-        .dashboard-columns {
-          grid-template-columns: 1fr;
-        }
-      }
-      .dashboard-panel {
-        background: var(--panel);
-        border: 1px solid var(--panel-border);
-        border-radius: 12px;
-        padding: 20px;
-      }
-      .dashboard-panel h3 {
-        font-size: 14px;
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin: 0 0 14px;
-      }
-
-      .activity-item {
-        display: flex;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--panel-border);
-      }
-      .activity-item:last-child {
-        border-bottom: none;
-      }
-      .activity-item img {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        flex-shrink: 0;
-      }
-      .activity-item .activity-message {
-        font-size: 13px;
-      }
-      .activity-item .activity-meta {
-        font-size: 11px;
-        color: var(--text-dim);
-        margin-top: 2px;
-      }
-
-      .team-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--panel-border);
-      }
-      .team-row:last-child {
-        border-bottom: none;
-      }
-      .team-row img {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-      }
-      .team-row .team-login {
-        font-size: 13px;
-        font-weight: 500;
-      }
-      .team-row .badge {
-        margin-left: auto;
-      }
     </style>
   </head>
   <body>
@@ -946,44 +825,6 @@
           if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
           const body = await res.json();
           return body.map((c) => c.login);
-        }
-
-        async listCollaboratorsWithPermissions(repo) {
-          // Same endpoint as listCollaborators, but keeps the permission level
-          // and avatar for the Team page instead of flattening to just logins.
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/collaborators?per_page=100`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to list collaborators (${res.status})`);
-          const body = await res.json();
-          return body.map((c) => ({
-            login: c.login,
-            avatarUrl: c.avatar_url,
-            permission: c.permissions && c.permissions.admin ? "admin" : c.permissions && c.permissions.push ? "write" : "read",
-          }));
-        }
-
-        readTeam(repo) { return this.getFile(repo, "team.json"); }
-        writeTeam(repo, data, handle) { return this.putFile(repo, "team.json", data, handle, "Sync team roster"); }
-
-        async listRecentActivity(repo, limit = 8) {
-          // Git history as the activity log, per planning.md's Collaboration
-          // section — scoped to .gamejam/ so this doesn't pick up unrelated
-          // commits to game source code sitting in the same repo.
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/commits?path=${GAMEJAM_DIR}&per_page=${limit}`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to load activity (${res.status})`);
-          const body = await res.json();
-          return body.map((c) => ({
-            sha: c.sha,
-            message: c.commit.message.split("\n")[0],
-            authorLogin: c.author ? c.author.login : (c.commit.author ? c.commit.author.name : "unknown"),
-            authorAvatarUrl: c.author ? c.author.avatar_url : null,
-            date: c.commit.author ? c.commit.author.date : null,
-          }));
         }
 
         async detectProject(repo) {
@@ -1669,13 +1510,53 @@
         );
       }
 
-      function BoardView({ workspace, project, collaborators }) {
+      function BoardWorkspace({ repo, storage, onBack }) {
+        const { loading, error, workspace, project, dirty, saving, conflicts } = useWorkspace(storage, repo);
         const [newCardTitles, setNewCardTitles] = useState({});
         const [draggingCardId, setDraggingCardId] = useState(null);
         const [dragOverStatus, setDragOverStatus] = useState(null);
         const [selectedCardId, setSelectedCardId] = useState(null);
+        const [collaborators, setCollaborators] = useState([]);
 
-        const { board, cards } = project;
+        // Fetched once per repo for the assignee dropdown. Failure here
+        // shouldn't block the board — just leaves the dropdown showing
+        // "Unassigned" only, so errors are swallowed rather than surfaced.
+        useEffect(() => {
+          let cancelled = false;
+          storage.listCollaborators(repo)
+            .then((logins) => { if (!cancelled) setCollaborators(logins); })
+            .catch(() => { if (!cancelled) setCollaborators([]); });
+          return () => { cancelled = true; };
+        }, [repo, storage]);
+
+        // The board needs more horizontal room than the 560px centered card
+        // layout used everywhere else. Widen #root only while this component
+        // is mounted, restore it on unmount.
+        useEffect(() => {
+          const root = document.getElementById("root");
+          const previous = root.style.maxWidth;
+          root.style.maxWidth = "1100px";
+          return () => { root.style.maxWidth = previous; };
+        }, []);
+
+        if (loading) {
+          return (
+            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div className="status-line"><Spinner /> Loading project…</div>
+            </div>
+          );
+        }
+
+        if (error) {
+          return (
+            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div className="error-box">{error}</div>
+              <button onClick={onBack}>Back to repositories</button>
+            </div>
+          );
+        }
+
+        const { manifest, board, cards } = project;
         const statuses = Object.values(CardStatus);
         const nextStatus = (status) => statuses[(statuses.indexOf(status) + 1) % statuses.length];
         const prevStatus = (status) => statuses[(statuses.indexOf(status) - 1 + statuses.length) % statuses.length];
@@ -1707,6 +1588,34 @@
 
         return (
           <div>
+            <div className="breadcrumb">
+              <button onClick={onBack}>← Repositories</button>
+              <span>{repo.full_name}</span>
+            </div>
+
+            <div className="board-topbar">
+              <div>
+                <p className="title" style={{ fontSize: 18, marginBottom: 2 }}>{manifest.name}</p>
+                <p className="subtitle" style={{ marginBottom: 0 }}>
+                  {manifest.jam || "No jam set"}{manifest.theme ? ` · ${manifest.theme}` : ""}
+                </p>
+              </div>
+              <div className="board-topbar-actions">
+                {conflicts.length > 0 && (
+                  <div className="error-box" style={{ marginBottom: 0 }}>
+                    {conflicts.length} file{conflicts.length > 1 ? "s" : ""} changed on GitHub since this loaded.{" "}
+                    <button onClick={() => workspace.reloadDiscardingLocalChanges()}>Reload</button>
+                  </div>
+                )}
+                {saving && <span className="status-line"><Spinner /> Saving…</span>}
+                {!saving && dirty && <span className="status-line">Unsaved changes</span>}
+                {!saving && !dirty && <span className="status-line">All changes saved</span>}
+                <button className="btn-primary" disabled={!dirty || saving} onClick={() => workspace.save("Planning updates")}>
+                  Save
+                </button>
+              </div>
+            </div>
+
             <div className="board-columns">
               {board.columns.map((col) => (
                 <div
@@ -1777,243 +1686,6 @@
         );
       }
 
-      function Dashboard({ project, repo, storage }) {
-        const [activity, setActivity] = useState(null);
-        const [activityError, setActivityError] = useState(null);
-        const [collaborators, setCollaborators] = useState(null);
-
-        useEffect(() => {
-          let cancelled = false;
-          storage.listRecentActivity(repo)
-            .then((items) => { if (!cancelled) setActivity(items); })
-            .catch((err) => { if (!cancelled) setActivityError(err.message); });
-          storage.listCollaboratorsWithPermissions(repo)
-            .then((list) => { if (!cancelled) setCollaborators(list); })
-            .catch(() => { if (!cancelled) setCollaborators([]); });
-          return () => { cancelled = true; };
-        }, [repo, storage]);
-
-        const { manifest, board, cards } = project;
-        const cardList = Object.values(cards);
-        const totalCards = cardList.length;
-        const doneCount = cardList.filter((c) => c.status === CardStatus.Done).length;
-        const percentDone = totalCards > 0 ? Math.round((doneCount / totalCards) * 100) : 0;
-
-        const countByStatus = (status) => cardList.filter((c) => c.status === status).length;
-
-        return (
-          <div>
-            {manifest.description && (
-              <p style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 20, maxWidth: 640 }}>{manifest.description}</p>
-            )}
-
-            <div className="dashboard-grid">
-              <div className="dashboard-stat">
-                <div className="stat-value">{totalCards}</div>
-                <div className="stat-label">Total cards</div>
-              </div>
-              <div className="dashboard-stat">
-                <div className="stat-value">{percentDone}%</div>
-                <div className="stat-label">Done</div>
-              </div>
-              {Object.values(CardStatus).map((status) => (
-                <div className="dashboard-stat" key={status}>
-                  <div className="stat-value">{countByStatus(status)}</div>
-                  <div className="stat-label">{statusLabel(status)}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="dashboard-columns">
-              <div className="dashboard-panel">
-                <h3>Team</h3>
-                {collaborators === null && <div className="status-line"><Spinner /> Loading…</div>}
-                {collaborators && collaborators.length === 0 && <div className="empty-state">No collaborators found.</div>}
-                {collaborators && collaborators.map((c) => (
-                  <div className="team-row" key={c.login}>
-                    <img src={c.avatarUrl} alt="" />
-                    <span className="team-login">{c.login}</span>
-                    <span className="badge">{c.permission}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="dashboard-panel">
-                <h3>Recent activity</h3>
-                {activityError && <div className="error-box">{activityError}</div>}
-                {!activity && !activityError && <div className="status-line"><Spinner /> Loading…</div>}
-                {activity && activity.length === 0 && <div className="empty-state">No commits to .gamejam/ yet.</div>}
-                {activity && activity.map((item) => (
-                  <div className="activity-item" key={item.sha}>
-                    {item.authorAvatarUrl && <img src={item.authorAvatarUrl} alt="" />}
-                    <div>
-                      <div className="activity-message">{item.message}</div>
-                      <div className="activity-meta">
-                        {item.authorLogin}{item.date ? ` · ${new Date(item.date).toLocaleString()}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      function TeamPage({ repo, storage }) {
-        const [collaborators, setCollaborators] = useState(null);
-        const [teamHandle, setTeamHandle] = useState(null);
-        const [syncing, setSyncing] = useState(false);
-        const [error, setError] = useState(null);
-        const [lastSyncedAt, setLastSyncedAt] = useState(null);
-
-        const load = useCallback(() => {
-          setError(null);
-          Promise.all([
-            storage.listCollaboratorsWithPermissions(repo),
-            storage.readTeam(repo),
-          ]).then(([collabs, team]) => {
-            setCollaborators(collabs);
-            setTeamHandle(team.handle);
-            setLastSyncedAt(team.data.length > 0 ? true : null);
-          }).catch((err) => setError(err.message));
-        }, [repo, storage]);
-
-        useEffect(() => { load(); }, [load]);
-
-        const handleSync = async () => {
-          if (!collaborators) return;
-          setSyncing(true);
-          setError(null);
-          try {
-            const teamData = collaborators.map((c) => ({ login: c.login, role: c.permission }));
-            const handle = await storage.writeTeam(repo, teamData, teamHandle);
-            setTeamHandle(handle);
-            setLastSyncedAt(true);
-          } catch (err) {
-            setError(err.message);
-          } finally {
-            setSyncing(false);
-          }
-        };
-
-        return (
-          <div className="dashboard-panel" style={{ maxWidth: 480 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <h3 style={{ margin: 0 }}>Team roster</h3>
-              <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} disabled={syncing || !collaborators} onClick={handleSync}>
-                {syncing ? "Syncing…" : "Sync to team.json"}
-              </button>
-            </div>
-
-            <p className="subtitle" style={{ marginBottom: 14 }}>
-              Mirrors each collaborator's current GitHub permission level. GitHub is the source of truth — this is a
-              persisted snapshot in team.json, refreshed whenever you hit Sync.
-            </p>
-
-            {error && <div className="error-box">{error}</div>}
-            {!collaborators && !error && <div className="status-line"><Spinner /> Loading…</div>}
-            {collaborators && collaborators.length === 0 && <div className="empty-state">No collaborators on this repository.</div>}
-            {collaborators && collaborators.map((c) => (
-              <div className="team-row" key={c.login}>
-                <img src={c.avatarUrl} alt="" />
-                <span className="team-login">{c.login}</span>
-                <span className="badge">{c.permission}</span>
-              </div>
-            ))}
-          </div>
-        );
-      }
-
-      function ProjectShell({ repo, storage, onBack }) {
-        const { loading, error, workspace, project, dirty, saving, conflicts } = useWorkspace(storage, repo);
-        const [view, setView] = useState("dashboard"); // dashboard | board | team
-        const [collaboratorLogins, setCollaboratorLogins] = useState([]);
-
-        // Fetched once per repo for the board's assignee dropdown. Failure
-        // here shouldn't block the board — just leaves the dropdown showing
-        // "Unassigned" only, so errors are swallowed rather than surfaced.
-        useEffect(() => {
-          let cancelled = false;
-          storage.listCollaborators(repo)
-            .then((logins) => { if (!cancelled) setCollaboratorLogins(logins); })
-            .catch(() => { if (!cancelled) setCollaboratorLogins([]); });
-          return () => { cancelled = true; };
-        }, [repo, storage]);
-
-        // The board/dashboard need more horizontal room than the 560px
-        // centered card layout used for login/repo screens. Widen #root only
-        // while this component is mounted, restore it on unmount.
-        useEffect(() => {
-          const root = document.getElementById("root");
-          const previous = root.style.maxWidth;
-          root.style.maxWidth = "1100px";
-          return () => { root.style.maxWidth = previous; };
-        }, []);
-
-        if (loading) {
-          return (
-            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-              <div className="status-line"><Spinner /> Loading project…</div>
-            </div>
-          );
-        }
-
-        if (error) {
-          return (
-            <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-              <div className="error-box">{error}</div>
-              <button onClick={onBack}>Back to repositories</button>
-            </div>
-          );
-        }
-
-        const { manifest } = project;
-
-        return (
-          <div>
-            <div className="breadcrumb">
-              <button onClick={onBack}>← Repositories</button>
-              <span>{repo.full_name}</span>
-            </div>
-
-            <div className="board-topbar">
-              <div>
-                <p className="title" style={{ fontSize: 18, marginBottom: 2 }}>{manifest.name}</p>
-                <p className="subtitle" style={{ marginBottom: 0 }}>
-                  {manifest.jam || "No jam set"}{manifest.theme ? ` · ${manifest.theme}` : ""}
-                </p>
-              </div>
-              <div className="board-topbar-actions">
-                {conflicts.length > 0 && (
-                  <div className="error-box" style={{ marginBottom: 0 }}>
-                    {conflicts.length} file{conflicts.length > 1 ? "s" : ""} changed on GitHub since this loaded.{" "}
-                    <button onClick={() => workspace.reloadDiscardingLocalChanges()}>Reload</button>
-                  </div>
-                )}
-                {saving && <span className="status-line"><Spinner /> Saving…</span>}
-                {!saving && dirty && <span className="status-line">Unsaved changes</span>}
-                {!saving && !dirty && <span className="status-line">All changes saved</span>}
-                <button className="btn-primary" disabled={!dirty || saving} onClick={() => workspace.save("Planning updates")}>
-                  Save
-                </button>
-              </div>
-            </div>
-
-            <div className="view-tabs">
-              <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}>Dashboard</button>
-              <button className={view === "board" ? "active" : ""} onClick={() => setView("board")}>Board</button>
-              <button className={view === "team" ? "active" : ""} onClick={() => setView("team")}>Team</button>
-            </div>
-
-            {view === "dashboard" && <Dashboard project={project} repo={repo} storage={storage} />}
-            {view === "board" && <BoardView workspace={workspace} project={project} collaborators={collaboratorLogins} />}
-            {view === "team" && <TeamPage repo={repo} storage={storage} />}
-          </div>
-        );
-      }
-
-
       function ProjectGate({ repo, storage, onBack }) {
         const [phase, setPhase] = useState("checking"); // checking | not-found | loaded | error
         const [error, setError] = useState(null);
@@ -2049,7 +1721,7 @@
           return <InitProjectForm repo={repo} storage={storage} onInitialized={() => setPhase("loaded")} />;
         }
 
-        return <ProjectShell repo={repo} storage={storage} onBack={onBack} />;
+        return <BoardWorkspace repo={repo} storage={storage} onBack={onBack} />;
       }
 
       function App() {
