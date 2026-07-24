@@ -762,8 +762,8 @@
       // *` — it never sees a client secret, since neither the device flow
       // nor refreshing a device-flow-issued token requires one.
       const CONFIG = {
-        clientId: "Iv23liExampleGitHubAppClientId",
-        appSlug: "gamejam-planner",
+        clientId: "Iv23lijW75Uw61RKbn2I",
+        appSlug: "gamejamplanner",
         relayBaseUrl: "https://little-grass-e4c2gamejam-planner.justin-dean-young.workers.dev",
       };
 
@@ -1039,13 +1039,8 @@
 
       // ProjectManifest: { id, name, description, jam, theme, createdAt,
       //                     storage: { kind, githubOwner?, githubRepo? } }
-      // Card: { id, title, status, description, tags[], assignee, createdAt,
-      //          updatedAt, trackingIssueNumber? }
-      // Board: { columns: [{ id, status }] } — just column definitions now.
-      //   Which cards belong to which column is derived from each card's own
-      //   `status` field (see BoardView.cardsForStatus), not stored here.
-      //   Older repos may still have a `cardIds` array on each column from
-      //   before this change; Workspace.load() strips it on read.
+      // Card: { id, title, status, description, tags[], assignee, createdAt, updatedAt }
+      // Board: { columns: [{ id, status, cardIds[] }] }
 
       // =====================================================================
       // STORAGE: GitHubStorage — plain fetch against the REST Contents API.
@@ -1313,30 +1308,6 @@
           return issue.number;
         }
 
-        /** Closes a card's tracking issue (card moved to Done, or deleted). */
-        async closeIssue(repo, issueNumber, comment) {
-          if (comment) {
-            await fetch(
-              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${issueNumber}/comments`,
-              {
-                method: "POST",
-                headers: this.authHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({ body: comment }),
-              },
-            ).catch(() => {});
-          }
-
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${issueNumber}`,
-            {
-              method: "PATCH",
-              headers: this.authHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ state: "closed", state_reason: "completed" }),
-            },
-          );
-          if (!res.ok) throw new Error(`Failed to close issue #${issueNumber} (${res.status})`);
-        }
-
         async getFile(repo, relativePath) {
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${GAMEJAM_DIR}/${relativePath}`,
@@ -1421,28 +1392,15 @@
 
           const loadedCards = await Promise.all(cardIds.map((id) => this.storage.readCard(this.repo, id)));
           this.cards = new Map(
-            loadedCards.map((result) => [
-              result.data.id,
-              { data: result.data, handle: result.handle, dirty: false, deleted: false, notifyAssigneeOnSave: null, closeIssueOnSaveReason: null },
-            ]),
+            loadedCards.map((result) => [result.data.id, { data: result.data, handle: result.handle, dirty: false, deleted: false }]),
           );
 
           // Seed default columns on a freshly initialized, empty board so the
           // Kanban UI has somewhere to put cards. Persisted on next save.
           if (this.board.data.columns.length === 0) {
             this.board.data = {
-              columns: Object.values(CardStatus).map((status) => ({ id: status, status })),
+              columns: Object.values(CardStatus).map((status) => ({ id: status, status, cardIds: [] })),
             };
-            this.board.dirty = true;
-          } else if (this.board.data.columns.some((col) => "cardIds" in col)) {
-            // Column → card membership used to live in board.json's cardIds
-            // arrays. That's now derived from each card's own `status`
-            // field instead (so two people moving *different* cards no
-            // longer collide on one shared file) — this strips the
-            // now-unused field from repos written by the old code, so it
-            // doesn't linger as stale data. Read-compatible either way;
-            // this just tidies it up on the next save.
-            this.board.data = { columns: this.board.data.columns.map(({ id, status }) => ({ id, status })) };
             this.board.dirty = true;
           }
 
@@ -1462,36 +1420,15 @@
           return paths;
         }
 
-        /**
-         * Sets a card's data, tracking it dirty for the next save. Also
-         * queues any GitHub-facing side effects (assignee notification,
-         * closing the tracking issue) implied by what changed — these don't
-         * fire here, only once save() confirms the write actually landed,
-         * so a card that loses a write race doesn't send a notification for
-         * a change that never persisted.
-         */
+        updateBoard(updater) {
+          this.board.data = updater(this.board.data);
+          this.board.dirty = true;
+          this.emit();
+        }
+
         upsertCard(card) {
           const existing = this.cards.get(card.id);
-          const previousAssignee = existing ? existing.data.assignee : null;
-          const previousStatus = existing ? existing.data.status : null;
-
-          const tracked = {
-            data: card,
-            handle: existing ? existing.handle : null,
-            dirty: true,
-            deleted: false,
-            notifyAssigneeOnSave: existing ? existing.notifyAssigneeOnSave : null,
-            closeIssueOnSaveReason: existing ? existing.closeIssueOnSaveReason : null,
-          };
-
-          if (card.assignee && card.assignee !== previousAssignee) {
-            tracked.notifyAssigneeOnSave = card.assignee;
-          }
-          if (card.status === CardStatus.Done && previousStatus !== CardStatus.Done) {
-            tracked.closeIssueOnSaveReason = "Closed automatically — card moved to Done.";
-          }
-
-          this.cards.set(card.id, tracked);
+          this.cards.set(card.id, { data: card, handle: existing ? existing.handle : null, dirty: true, deleted: false });
           this.emit();
         }
 
@@ -1500,23 +1437,33 @@
           const now = new Date().toISOString();
           const card = { id, title, status, description: "", tags: [], assignee: null, createdAt: now, updatedAt: now };
           this.upsertCard(card);
+          this.updateBoard((board) => ({
+            columns: board.columns.map((col) => (col.status === status ? { ...col, cardIds: [...col.cardIds, id] } : col)),
+          }));
           return card;
         }
 
         moveCard(cardId, toStatus) {
           const tracked = this.cards.get(cardId);
           if (!tracked || tracked.data.status === toStatus) return;
+          const fromStatus = tracked.data.status;
           this.upsertCard({ ...tracked.data, status: toStatus, updatedAt: new Date().toISOString() });
+          this.updateBoard((board) => ({
+            columns: board.columns.map((col) => {
+              if (col.status === fromStatus) return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+              if (col.status === toStatus) return { ...col, cardIds: [...col.cardIds, cardId] };
+              return col;
+            }),
+          }));
         }
 
         deleteCard(cardId) {
           const tracked = this.cards.get(cardId);
           if (!tracked) return;
           tracked.deleted = true;
-          if (!tracked.closeIssueOnSaveReason) {
-            tracked.closeIssueOnSaveReason = "Closed automatically — card was deleted from the board.";
-          }
-          this.emit();
+          this.updateBoard((board) => ({
+            columns: board.columns.map((col) => ({ ...col, cardIds: col.cardIds.filter((id) => id !== cardId) })),
+          }));
         }
 
         /** Manual save, per planning.md: "Save manually or autosave every few minutes." */
@@ -1527,15 +1474,11 @@
 
           try {
             // Deletions go out first, one at a time (the Contents API delete
-            // endpoint isn't part of the batch write shape). Tracking-issue
-            // closure only fires once the delete actually lands.
+            // endpoint isn't part of the batch write shape).
             for (const [id, tracked] of this.cards) {
               if (tracked.deleted) {
                 if (tracked.handle) {
                   await this.storage.deleteCard(this.repo, id, tracked.handle);
-                }
-                if (tracked.closeIssueOnSaveReason && tracked.data.trackingIssueNumber) {
-                  this.closeTrackingIssue(tracked.data, tracked.closeIssueOnSaveReason).catch(() => {});
                 }
                 this.cards.delete(id);
               }
@@ -1549,38 +1492,19 @@
 
             if (writes.length > 0) {
               const result = await this.storage.commitBatch(this.repo, message, writes);
-
               for (const handle of result.succeeded) {
                 if (handle.path === "board.json") {
                   this.board.handle = handle;
                   this.board.dirty = false;
-                  continue;
-                }
-
-                const id = handle.path.slice("cards/".length, -".json".length);
-                const tracked = this.cards.get(id);
-                if (!tracked) continue;
-                tracked.handle = handle;
-                tracked.dirty = false;
-
-                // Only now — after the write actually landed — fire any
-                // queued GitHub-facing side effects. If this card had
-                // instead come back in result.conflicts below, these flags
-                // are left untouched and retried on the next successful
-                // save, rather than firing for a change that never stuck.
-                if (tracked.notifyAssigneeOnSave) {
-                  const assignee = tracked.notifyAssigneeOnSave;
-                  tracked.notifyAssigneeOnSave = null;
-                  this.notifyAssignee({ ...tracked.data, assignee }).catch(() => {});
-                }
-                if (tracked.closeIssueOnSaveReason) {
-                  const reason = tracked.closeIssueOnSaveReason;
-                  tracked.closeIssueOnSaveReason = null;
-                  this.closeTrackingIssue(tracked.data, reason).catch(() => {});
+                } else if (handle.path.startsWith("cards/")) {
+                  const id = handle.path.slice("cards/".length, -".json".length);
+                  const tracked = this.cards.get(id);
+                  if (tracked) { tracked.handle = handle; tracked.dirty = false; }
                 }
               }
-
-              for (const conflict of result.conflicts) this._flagConflict(conflict.path, conflict.message);
+              this.conflicts = result.conflicts;
+            } else {
+              this.conflicts = [];
             }
           } finally {
             this.saving = false;
@@ -1589,41 +1513,15 @@
         }
 
         /**
-         * Scoped conflict recovery: reload just the one file that changed
-         * underneath us — discarding local edits to *that* card (or board),
-         * but leaving every other dirty card untouched. Replaces an earlier
-         * version of this that reloaded the entire workspace on any
-         * conflict, which threw away unrelated in-progress edits too.
+         * Minimal conflict recovery: reload everything from GitHub, discarding
+         * local unsaved changes to the conflicting files. A real field-level
+         * merge (per planning.md's Sync section) is future work — this is the
+         * "prompt the user" half without the "auto-merge different fields" half.
          */
-        async resolveConflict(path) {
-          if (path === "board.json") {
-            const result = await this.storage.readBoard(this.repo);
-            this.board = { data: result.data, handle: result.handle, dirty: false };
-          } else if (path.startsWith("cards/")) {
-            const id = path.slice("cards/".length, -".json".length);
-            try {
-              const result = await this.storage.readCard(this.repo, id);
-              this.cards.set(id, {
-                data: result.data,
-                handle: result.handle,
-                dirty: false,
-                deleted: false,
-                notifyAssigneeOnSave: null,
-                closeIssueOnSaveReason: null,
-              });
-            } catch (err) {
-              if (err.status === 404) this.cards.delete(id); // someone else deleted it first
-              else throw err;
-            }
-          }
-          this.conflicts = this.conflicts.filter((c) => c.path !== path);
+        async reloadDiscardingLocalChanges() {
+          await this.load();
+          this.conflicts = [];
           this.emit();
-        }
-
-        async resolveAllConflicts() {
-          for (const conflict of this.conflicts.slice()) {
-            await this.resolveConflict(conflict.path);
-          }
         }
 
         startAutosave() {
@@ -1716,11 +1614,11 @@
           }
         }
 
-        _flagConflict(path, message) {
+        _flagConflict(path) {
           if (!this.conflicts.some((c) => c.path === path)) {
             this.conflicts = [
               ...this.conflicts,
-              { path, message: message || `${path} changed on GitHub since this loaded.` },
+              { path, message: `${path} changed on GitHub since this loaded.` },
             ];
           }
         }
@@ -1752,25 +1650,6 @@
             }
           } catch (err) {
             this.notifyError = `Couldn't notify ${card.assignee}: ${err.message}`;
-          } finally {
-            this.emit();
-          }
-        }
-
-        /**
-         * Closes a card's tracking issue, e.g. when it's moved to Done or
-         * deleted. Best-effort, same rationale as notifyAssignee — closing
-         * the issue is a side effect of the card action, not a precondition
-         * for it, so failures surface via notifyError rather than blocking
-         * the move/delete that triggered this.
-         */
-        async closeTrackingIssue(card, reasonComment) {
-          if (!card.trackingIssueNumber) return;
-          this.notifyError = null;
-          try {
-            await this.storage.closeIssue(this.repo, card.trackingIssueNumber, reasonComment);
-          } catch (err) {
-            this.notifyError = `Couldn't close issue #${card.trackingIssueNumber}: ${err.message}`;
           } finally {
             this.emit();
           }
@@ -2275,16 +2154,6 @@
         const nextStatus = (status) => statuses[(statuses.indexOf(status) + 1) % statuses.length];
         const prevStatus = (status) => statuses[(statuses.indexOf(status) - 1 + statuses.length) % statuses.length];
 
-        // Column membership is derived from each card's own `status` field
-        // rather than a shared cardIds array in board.json — that's what
-        // lets two people move *different* cards without both writing the
-        // same file. Sorted by updatedAt so newly added/moved cards land at
-        // the bottom, approximating the old array-append order without a
-        // dedicated position field.
-        const cardsForStatus = (status) => Object.values(cards)
-          .filter((card) => card.status === status)
-          .sort((a, b) => (a.updatedAt || "").localeCompare(b.updatedAt || ""));
-
         const handleAddCard = (status) => {
           const title = (newCardTitles[status] || "").trim();
           if (!title) return;
@@ -2323,12 +2192,13 @@
                 >
                   <div className="board-column-header">
                     {statusLabel(col.status)}
-                    <span className="board-column-count">{cardsForStatus(col.status).length}</span>
+                    <span className="board-column-count">{col.cardIds.length}</span>
                   </div>
 
                   <div className="board-column-cards">
-                    {cardsForStatus(col.status).map((card) => {
-                      const cardId = card.id;
+                    {col.cardIds.map((cardId) => {
+                      const card = cards[cardId];
+                      if (!card) return null;
                       return (
                         <div
                           key={cardId}
@@ -2375,13 +2245,12 @@
                 repo={repo}
                 onClose={() => setSelectedCardId(null)}
                 onSave={(updated) => {
-                  // upsertCard diffs against the previous assignee/status
-                  // itself and queues any GitHub notification / issue
-                  // closure this implies — it only fires those once save()
-                  // confirms the write actually landed, so nothing extra is
-                  // needed here.
+                  const assigneeChanged = updated.assignee && updated.assignee !== selectedCard.assignee;
                   workspace.upsertCard(updated);
                   setSelectedCardId(null);
+                  // Fire-and-forget: a notification hiccup shouldn't block
+                  // the card save. Failures surface via workspace.notifyError.
+                  if (assigneeChanged) workspace.notifyAssignee(updated).catch(() => {});
                 }}
                 onDelete={() => { workspace.deleteCard(selectedCardId); setSelectedCardId(null); }}
               />
@@ -2600,8 +2469,8 @@
               <div className="board-topbar-actions">
                 {conflicts.length > 0 && (
                   <div className="error-box" style={{ marginBottom: 0 }}>
-                    {conflicts.map((c) => c.path).join(", ")} changed on GitHub since this loaded.{" "}
-                    <button onClick={() => workspace.resolveAllConflicts()}>Reload</button>
+                    {conflicts.length} file{conflicts.length > 1 ? "s" : ""} changed on GitHub since this loaded.{" "}
+                    <button onClick={() => workspace.reloadDiscardingLocalChanges()}>Reload</button>
                   </div>
                 )}
                 {notifyError && (
