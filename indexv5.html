@@ -564,60 +564,6 @@
       .field-header label {
         margin-bottom: 0;
       }
-      .checklist-progress {
-        font-size: 11px;
-        color: var(--text-dim);
-      }
-      .checklist-items {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        margin-bottom: 8px;
-      }
-      .checklist-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        font-size: 13px;
-        padding: 6px 8px;
-        border-radius: 6px;
-        cursor: pointer;
-      }
-      .checklist-item:hover {
-        background: #1c2029;
-      }
-      .checklist-item input[type="checkbox"] {
-        margin-top: 2px;
-        accent-color: var(--accent);
-        cursor: pointer;
-      }
-      .checklist-item.checked span {
-        color: var(--text-dim);
-        text-decoration: line-through;
-      }
-      .checklist-add-row {
-        display: flex;
-        gap: 8px;
-      }
-      .checklist-add-row input {
-        flex: 1;
-      }
-      .checklist-add-row button {
-        padding: 8px 14px;
-      }
-      .checklist-badge {
-        font-size: 10px;
-        padding: 2px 7px;
-        border-radius: 999px;
-        background: #1f232c;
-        color: var(--text-dim);
-        border: 1px solid var(--panel-border);
-        white-space: nowrap;
-      }
-      .checklist-badge.complete {
-        color: var(--accent);
-        border-color: var(--accent-dim);
-      }
       .mic-button {
         width: 26px;
         height: 26px;
@@ -1089,26 +1035,12 @@
       // STORAGE: domain types (documented as shapes, JS has no interfaces)
       // =====================================================================
       const CardStatus = { Backlog: "backlog", InProgress: "in-progress", Blocked: "blocked", Done: "done" };
-      const Priority = { Critical: "critical", High: "high", Normal: "normal", Low: "low" };
-      const Category = { Programming: "programming", Art: "art", Animation: "animation", Audio: "audio", UI: "ui", Design: "design", QA: "qa", Writing: "writing" };
       const StorageProviderKind = { GitHub: "github", LocalFolder: "local-folder" };
-
-      // Reserved label prefixes used to mirror planner-only fields as GitHub
-      // Labels (see GitHubStorage.buildLabels / ensureProjectLabels below).
-      // A plain user tag can never collide with these since ":" isn't valid
-      // in the tag input's comma-separated parsing.
-      const PRIORITY_LABEL_PREFIX = "priority:";
-      const CATEGORY_LABEL_PREFIX = "category:";
 
       // ProjectManifest: { id, name, description, jam, theme, createdAt,
       //                     storage: { kind, githubOwner?, githubRepo? } }
-      // Card: { id, title, status, description, tags[], assignee, priority?,
-      //          category?, dueDate?, createdAt, updatedAt, issueNumber?,
-      //          issueUrl? }
-      //   The GitHub Issue (issueNumber/issueUrl) is a one-way mirror of the
-      //   card — rebuilt from card state after every successful save. Editing
-      //   the Issue directly on github.com will NOT flow back into the card;
-      //   the JSON file in .gamejam/cards/ remains the single source of truth.
+      // Card: { id, title, status, description, tags[], assignee, createdAt,
+      //          updatedAt, trackingIssueNumber? }
       // Board: { columns: [{ id, status }] } — just column definitions now.
       //   Which cards belong to which column is derived from each card's own
       //   `status` field (see BoardView.cardsForStatus), not stored here.
@@ -1222,62 +1154,6 @@
         readTeam(repo) { return this.getFile(repo, "team.json"); }
         writeTeam(repo, data, handle) { return this.putFile(repo, "team.json", data, handle, "Sync team roster"); }
 
-        async listLabels(repo) {
-          const res = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/labels?per_page=100`,
-            { headers: this.authHeaders() },
-          );
-          if (!res.ok) throw new Error(`Failed to list labels (${res.status})`);
-          const body = await res.json();
-          return body.map((l) => l.name);
-        }
-
-        async createLabel(repo, name, color, description) {
-          const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/labels`, {
-            method: "POST",
-            headers: this.authHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ name, color, description }),
-          });
-          // 422 here almost always means the label already exists (e.g. a
-          // race between two people adding the same new tag) — treat that
-          // as success rather than surfacing an error for something that's
-          // already true.
-          if (!res.ok && res.status !== 422) {
-            throw new Error(`Failed to create label "${name}" (${res.status})`);
-          }
-        }
-
-        /**
-         * Creates any of the given label names that don't already exist in
-         * the repo. Called both at project setup (priority + category
-         * scale, so the picker isn't empty on card #1) and opportunistically
-         * during save (for freeform user tags), so a PATCH to an issue never
-         * 422s on an unknown label.
-         */
-        async ensureLabelsExist(repo, namesWithColors) {
-          const existing = new Set(await this.listLabels(repo));
-          const missing = namesWithColors.filter(({ name }) => !existing.has(name));
-          for (const { name, color, description } of missing) {
-            await this.createLabel(repo, name, color, description);
-          }
-        }
-
-        /** Seeds the priority scale and suggested categories as repo labels at project setup. */
-        async ensureProjectLabels(repo) {
-          const priorityColors = { critical: "b60205", high: "d93f0b", normal: "fbca04", low: "0e8a16" };
-          const priorityLabels = Object.values(Priority).map((p) => ({
-            name: `${PRIORITY_LABEL_PREFIX}${p}`,
-            color: priorityColors[p] || "ededed",
-            description: `Planner priority: ${p}`,
-          }));
-          const categoryLabels = Object.values(Category).map((c) => ({
-            name: `${CATEGORY_LABEL_PREFIX}${c}`,
-            color: "5319e7",
-            description: `Planner category: ${c}`,
-          }));
-          await this.ensureLabelsExist(repo, [...priorityLabels, ...categoryLabels]);
-        }
-
         async listRecentActivity(repo, limit = 8) {
           // Git history as the activity log, per planning.md's Collaboration
           // section — scoped to .gamejam/ so this doesn't pick up unrelated
@@ -1311,15 +1187,9 @@
           const emptyBoard = { columns: [] };
           await this.putFile(repo, "project.json", manifest, null, "Initialize game jam planner");
           await this.putFile(repo, "board.json", emptyBoard, null, "Initialize game jam planner");
+          await this.putFile(repo, "milestones.json", [], null, "Initialize game jam planner");
           await this.putFile(repo, "team.json", [], null, "Initialize game jam planner");
           await this.putFile(repo, "assets.json", [], null, "Initialize game jam planner");
-          // Best-effort: seeds the priority scale + suggested categories as
-          // repo labels so the picker isn't empty on the first card, and so
-          // the first issue sync never 422s on an unknown label. Not fatal
-          // if it fails (e.g. the installation lacks label-write access) —
-          // ensureLabelsExist is retried opportunistically per-tag at save
-          // time regardless.
-          await this.ensureProjectLabels(repo).catch(() => {});
         }
 
         readManifest(repo) { return this.getFile(repo, "project.json"); }
@@ -1392,66 +1262,76 @@
         }
 
         /**
-         * One-way mirror: pushes the card's current state onto its GitHub
-         * Issue. The JSON file remains the source of truth — this never
-         * reads the Issue back. Creates the Issue on first sync (usually a
-         * card's first save) and reuses `issueNumber` on every sync after
-         * that, so re-saving never spawns duplicates.
-         *
-         * Any label this card needs (tags, plus mirrored priority/category
-         * labels) that doesn't exist yet in the repo is created first, so the PATCH
-         * below never 422s on an unknown label name.
+         * Notifies a card's assignee via a real GitHub notification: a repo
+         * issue @mentioning them, since Contents-API JSON files can't trigger
+         * GitHub's notification system on their own. One tracking issue per
+         * card, reused across re-assignments (number cached on the card as
+         * `trackingIssueNumber`) so re-assigning doesn't spawn duplicate issues.
          */
-        async syncCardIssue(repo, card) {
-          const labelNames = buildCardLabelNames(card);
-          // priority:*/category:* labels are pre-seeded by ensureProjectLabels
-          // at project setup. Freeform tags aren't — ensure any new ones exist.
-          const tagLabels = (card.tags || []).map((name) => ({ name, color: "ededed" }));
-          if (tagLabels.length > 0) {
-            await this.ensureLabelsExist(repo, tagLabels).catch(() => {});
-          }
+        async notifyAssignee(repo, card, assignee) {
+          const title = `[Card] ${card.title}`;
+          const body = [
+            `@${assignee} — you've been assigned to **${card.title}** on the game jam board.`,
+            "",
+            `Status: ${statusLabel(card.status)}`,
+            card.description ? `\n${card.description}` : null,
+          ].filter((line) => line !== null).join("\n");
 
-          const payload = {
-            title: card.title,
-            body: buildIssueBody(card),
-            labels: labelNames,
-            assignees: card.assignee ? [card.assignee] : [],
-            state: card.status === CardStatus.Done ? "closed" : "open",
-            state_reason: card.status === CardStatus.Done ? "completed" : null,
-          };
-
-          if (card.issueNumber) {
+          if (card.trackingIssueNumber) {
             const res = await fetch(
-              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${card.issueNumber}`,
+              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${card.trackingIssueNumber}/comments`,
+              {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ body }),
+              },
+            );
+            if (!res.ok) throw new Error(`Failed to notify assignee (${res.status})`);
+
+            // Best-effort: also update GitHub's native assignee so it shows
+            // up in the repo's issue list, not just as a comment. Not fatal
+            // if this fails (e.g. assignee lacks issue-assign permission).
+            await fetch(
+              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${card.trackingIssueNumber}`,
               {
                 method: "PATCH",
                 headers: this.authHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ assignees: [assignee] }),
               },
-            );
-            if (!res.ok) throw new Error(`Failed to sync issue #${card.issueNumber} (${res.status})`);
-            const issue = await res.json();
-            return { issueNumber: issue.number, issueUrl: issue.html_url };
+            ).catch(() => {});
+
+            return card.trackingIssueNumber;
           }
 
           const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/issues`, {
             method: "POST",
             headers: this.authHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ title, body, assignees: [assignee] }),
           });
-          if (!res.ok) throw new Error(`Failed to create issue for card (${res.status})`);
+          if (!res.ok) throw new Error(`Failed to create tracking issue (${res.status})`);
           const issue = await res.json();
-          return { issueNumber: issue.number, issueUrl: issue.html_url };
+          return issue.number;
         }
 
-        /** Closes a card's mirrored Issue (card deleted from the board). */
-        async closeCardIssue(repo, issueNumber, reason = "not_planned") {
+        /** Closes a card's tracking issue (card moved to Done, or deleted). */
+        async closeIssue(repo, issueNumber, comment) {
+          if (comment) {
+            await fetch(
+              `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${issueNumber}/comments`,
+              {
+                method: "POST",
+                headers: this.authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ body: comment }),
+              },
+            ).catch(() => {});
+          }
+
           const res = await fetch(
             `https://api.github.com/repos/${repo.owner}/${repo.name}/issues/${issueNumber}`,
             {
               method: "PATCH",
               headers: this.authHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ state: "closed", state_reason: reason }),
+              body: JSON.stringify({ state: "closed", state_reason: "completed" }),
             },
           );
           if (!res.ok) throw new Error(`Failed to close issue #${issueNumber} (${res.status})`);
@@ -1517,7 +1397,7 @@
           this.pullTimer = null;
           this.lastPulledAt = null;
           this.pullError = null;
-          this.issueSyncError = null;
+          this.notifyError = null;
         }
 
         onChange(listener) {
@@ -1543,10 +1423,7 @@
           this.cards = new Map(
             loadedCards.map((result) => [
               result.data.id,
-              // issueDirty starts false on load — the Issue already reflects
-              // whatever was last saved. It only flips true on the next
-              // local edit (see upsertCard).
-              { data: result.data, handle: result.handle, dirty: false, deleted: false, issueDirty: false },
+              { data: result.data, handle: result.handle, dirty: false, deleted: false, notifyAssigneeOnSave: null, closeIssueOnSaveReason: null },
             ]),
           );
 
@@ -1586,32 +1463,33 @@
         }
 
         /**
-         * Sets a card's data, tracking it dirty for the next save. Any
-         * change to a field the Issue mirrors (title, description, status,
-         * assignee, tags, priority, category) also flags issueDirty — the
-         * actual sync call doesn't fire here, only once save() confirms the
-         * file write actually landed, so a card that loses a write race
-         * doesn't push a mirror update for a change that never persisted.
-         * dueDate is intentionally excluded: it isn't mirrored to the Issue.
+         * Sets a card's data, tracking it dirty for the next save. Also
+         * queues any GitHub-facing side effects (assignee notification,
+         * closing the tracking issue) implied by what changed — these don't
+         * fire here, only once save() confirms the write actually landed,
+         * so a card that loses a write race doesn't send a notification for
+         * a change that never persisted.
          */
         upsertCard(card) {
           const existing = this.cards.get(card.id);
-          const previous = existing ? existing.data : null;
+          const previousAssignee = existing ? existing.data.assignee : null;
+          const previousStatus = existing ? existing.data.status : null;
 
           const tracked = {
             data: card,
             handle: existing ? existing.handle : null,
             dirty: true,
             deleted: false,
-            issueDirty: existing ? existing.issueDirty : false,
+            notifyAssigneeOnSave: existing ? existing.notifyAssigneeOnSave : null,
+            closeIssueOnSaveReason: existing ? existing.closeIssueOnSaveReason : null,
           };
 
-          const mirroredFieldsChanged = !previous || [
-            "title", "description", "status", "assignee", "priority", "category",
-          ].some((key) => card[key] !== previous[key])
-            || JSON.stringify(card.tags || []) !== JSON.stringify(previous.tags || []);
-
-          if (mirroredFieldsChanged) tracked.issueDirty = true;
+          if (card.assignee && card.assignee !== previousAssignee) {
+            tracked.notifyAssigneeOnSave = card.assignee;
+          }
+          if (card.status === CardStatus.Done && previousStatus !== CardStatus.Done) {
+            tracked.closeIssueOnSaveReason = "Closed automatically — card moved to Done.";
+          }
 
           this.cards.set(card.id, tracked);
           this.emit();
@@ -1620,11 +1498,7 @@
         addCard({ title, status }) {
           const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
           const now = new Date().toISOString();
-          const card = {
-            id, title, status, description: "", tags: [], assignee: null,
-            priority: null, category: null, dueDate: null,
-            createdAt: now, updatedAt: now,
-          };
+          const card = { id, title, status, description: "", tags: [], assignee: null, createdAt: now, updatedAt: now };
           this.upsertCard(card);
           return card;
         }
@@ -1639,6 +1513,9 @@
           const tracked = this.cards.get(cardId);
           if (!tracked) return;
           tracked.deleted = true;
+          if (!tracked.closeIssueOnSaveReason) {
+            tracked.closeIssueOnSaveReason = "Closed automatically — card was deleted from the board.";
+          }
           this.emit();
         }
 
@@ -1650,15 +1527,15 @@
 
           try {
             // Deletions go out first, one at a time (the Contents API delete
-            // endpoint isn't part of the batch write shape). The mirrored
-            // Issue is closed only once the file delete actually lands.
+            // endpoint isn't part of the batch write shape). Tracking-issue
+            // closure only fires once the delete actually lands.
             for (const [id, tracked] of this.cards) {
               if (tracked.deleted) {
                 if (tracked.handle) {
                   await this.storage.deleteCard(this.repo, id, tracked.handle);
                 }
-                if (tracked.data.issueNumber) {
-                  this.storage.closeCardIssue(this.repo, tracked.data.issueNumber, "not_planned").catch(() => {});
+                if (tracked.closeIssueOnSaveReason && tracked.data.trackingIssueNumber) {
+                  this.closeTrackingIssue(tracked.data, tracked.closeIssueOnSaveReason).catch(() => {});
                 }
                 this.cards.delete(id);
               }
@@ -1686,13 +1563,20 @@
                 tracked.handle = handle;
                 tracked.dirty = false;
 
-                // Only now — after the file write actually landed — push the
-                // mirrored Issue update. If this card instead came back in
-                // result.conflicts below, issueDirty is left untouched and
-                // retried on the next successful save, rather than mirroring
-                // a change that never actually stuck.
-                if (tracked.issueDirty) {
-                  this.syncCardIssue(tracked).catch(() => {});
+                // Only now — after the write actually landed — fire any
+                // queued GitHub-facing side effects. If this card had
+                // instead come back in result.conflicts below, these flags
+                // are left untouched and retried on the next successful
+                // save, rather than firing for a change that never stuck.
+                if (tracked.notifyAssigneeOnSave) {
+                  const assignee = tracked.notifyAssigneeOnSave;
+                  tracked.notifyAssigneeOnSave = null;
+                  this.notifyAssignee({ ...tracked.data, assignee }).catch(() => {});
+                }
+                if (tracked.closeIssueOnSaveReason) {
+                  const reason = tracked.closeIssueOnSaveReason;
+                  tracked.closeIssueOnSaveReason = null;
+                  this.closeTrackingIssue(tracked.data, reason).catch(() => {});
                 }
               }
 
@@ -1700,30 +1584,6 @@
             }
           } finally {
             this.saving = false;
-            this.emit();
-          }
-        }
-
-        /**
-         * Pushes one card's mirrored Issue update and, on success, clears
-         * issueDirty and stores the issueNumber/issueUrl back onto the card
-         * (writing that back to the JSON file happens on the *next* save,
-         * same as how a freshly-created card's id only round-trips once
-         * saved — acceptable since the Issue link is a convenience, not
-         * data anything else depends on being immediately persisted).
-         * Best-effort: a failure here (rate limit, permissions, network)
-         * leaves issueDirty true so it's retried on the next save rather
-         * than surfacing as a save-blocking error.
-         */
-        async syncCardIssue(tracked) {
-          try {
-            const { issueNumber, issueUrl } = await this.storage.syncCardIssue(this.repo, tracked.data);
-            tracked.data = { ...tracked.data, issueNumber, issueUrl };
-            tracked.issueDirty = false;
-            if (!tracked.dirty) tracked.dirty = true; // pick up issueNumber/issueUrl on next save
-            this.emit();
-          } catch (err) {
-            this.issueSyncError = `Couldn't sync GitHub Issue for "${tracked.data.title}": ${err.message}`;
             this.emit();
           }
         }
@@ -1748,7 +1608,8 @@
                 handle: result.handle,
                 dirty: false,
                 deleted: false,
-                issueDirty: false,
+                notifyAssigneeOnSave: null,
+                closeIssueOnSaveReason: null,
               });
             } catch (err) {
               if (err.status === 404) this.cards.delete(id); // someone else deleted it first
@@ -1822,7 +1683,7 @@
 
               if (!tracked) {
                 // New card someone else pushed since this loaded.
-                this.cards.set(id, { data: result.data, handle: result.handle, dirty: false, deleted: false, issueDirty: false });
+                this.cards.set(id, { data: result.data, handle: result.handle, dirty: false, deleted: false });
                 continue;
               }
 
@@ -1834,7 +1695,7 @@
               }
 
               if (result.handle.revision !== tracked.handle?.revision) {
-                this.cards.set(id, { data: result.data, handle: result.handle, dirty: false, deleted: false, issueDirty: false });
+                this.cards.set(id, { data: result.data, handle: result.handle, dirty: false, deleted: false });
               }
             }
 
@@ -1874,6 +1735,46 @@
           this.pullTimer = null;
         }
 
+        /**
+         * Best-effort GitHub notification for a card assignment. Failures are
+         * recorded on `notifyError` rather than thrown — a notification
+         * hiccup shouldn't block the card save that triggered it.
+         */
+        async notifyAssignee(card) {
+          if (!card.assignee) return;
+          this.notifyError = null;
+          try {
+            const issueNumber = await this.storage.notifyAssignee(this.repo, card, card.assignee);
+            const tracked = this.cards.get(card.id);
+            if (tracked && issueNumber && issueNumber !== tracked.data.trackingIssueNumber) {
+              tracked.data = { ...tracked.data, trackingIssueNumber: issueNumber };
+              tracked.dirty = true;
+            }
+          } catch (err) {
+            this.notifyError = `Couldn't notify ${card.assignee}: ${err.message}`;
+          } finally {
+            this.emit();
+          }
+        }
+
+        /**
+         * Closes a card's tracking issue, e.g. when it's moved to Done or
+         * deleted. Best-effort, same rationale as notifyAssignee — closing
+         * the issue is a side effect of the card action, not a precondition
+         * for it, so failures surface via notifyError rather than blocking
+         * the move/delete that triggered this.
+         */
+        async closeTrackingIssue(card, reasonComment) {
+          if (!card.trackingIssueNumber) return;
+          this.notifyError = null;
+          try {
+            await this.storage.closeIssue(this.repo, card.trackingIssueNumber, reasonComment);
+          } catch (err) {
+            this.notifyError = `Couldn't close issue #${card.trackingIssueNumber}: ${err.message}`;
+          } finally {
+            this.emit();
+          }
+        }
       }
 
       function useWorkspace(storage, repo) {
@@ -1925,7 +1826,7 @@
           conflicts: workspace.conflicts,
           pulling: workspace.pulling,
           lastPulledAt: workspace.lastPulledAt,
-          issueSyncError: workspace.issueSyncError,
+          notifyError: workspace.notifyError,
         };
       }
 
@@ -2195,117 +2096,6 @@
         }
       }
 
-      function priorityLabel(priority) {
-        switch (priority) {
-          case Priority.Critical: return "Critical";
-          case Priority.High: return "High";
-          case Priority.Normal: return "Normal";
-          case Priority.Low: return "Low";
-          default: return priority;
-        }
-      }
-
-      function categoryLabel(category) {
-        switch (category) {
-          case Category.UI: return "UI";
-          case Category.QA: return "QA";
-          default: return category ? category[0].toUpperCase() + category.slice(1) : category;
-        }
-      }
-
-      /** Full label set (user tags + mirrored priority/category) for a card's Issue. */
-      function buildCardLabelNames(card) {
-        const labels = [...(card.tags || [])];
-        if (card.priority) labels.push(`${PRIORITY_LABEL_PREFIX}${card.priority}`);
-        if (card.category) labels.push(`${CATEGORY_LABEL_PREFIX}${card.category}`);
-        return labels;
-      }
-
-      /**
-       * Markdown checklist support. Cards don't keep a separate checklist
-       * model — per the MVP proposal, checklist state lives entirely inside
-       * `description` as standard GitHub-flavored markdown checkboxes
-       * ("- [ ] task" / "- [x] task"), so it round-trips through the Issue
-       * body with no extra sync logic. These helpers just parse that out for
-       * the interactive widget and write toggles back into the same string.
-       */
-      const CHECKLIST_ITEM_RE = /^(\s*[-*]\s+\[)([ xX])(\]\s*)(.*)$/;
-
-      function parseChecklist(description) {
-        const lines = (description || "").split("\n");
-        const items = [];
-        lines.forEach((line, lineIndex) => {
-          const m = line.match(CHECKLIST_ITEM_RE);
-          if (m) items.push({ line: lineIndex, checked: m[2].toLowerCase() === "x", text: m[4] });
-        });
-        return items;
-      }
-
-      function toggleChecklistLine(description, lineIndex) {
-        const lines = (description || "").split("\n");
-        const line = lines[lineIndex];
-        if (line == null) return description;
-        const m = line.match(CHECKLIST_ITEM_RE);
-        if (!m) return description;
-        const nextMark = m[2].toLowerCase() === "x" ? " " : "x";
-        lines[lineIndex] = `${m[1]}${nextMark}${m[3]}${m[4]}`;
-        return lines.join("\n");
-      }
-
-      /**
-       * Appends a new item under the description's "## Tasks" heading,
-       * creating that section if it doesn't exist yet. Inserts after the
-       * last existing checklist item in that section so new items land at
-       * the bottom of the list rather than the top.
-       */
-      function addChecklistItem(description, text) {
-        const trimmed = (text || "").trim();
-        if (!trimmed) return description;
-        const newLine = `- [ ] ${trimmed}`;
-        const lines = (description || "").split("\n");
-        const headerIndex = lines.findIndex((l) => /^#{1,6}\s*tasks\s*$/i.test(l.trim()));
-
-        if (headerIndex === -1) {
-          const sep = description && description.trim() ? "\n\n" : "";
-          return `${description || ""}${sep}## Tasks\n\n${newLine}`;
-        }
-
-        let insertAt = headerIndex + 1;
-        for (let i = headerIndex + 1; i < lines.length; i++) {
-          if (CHECKLIST_ITEM_RE.test(lines[i])) { insertAt = i + 1; continue; }
-          if (lines[i].trim() === "") continue;
-          break; // hit the next heading or prose — stop extending the section
-        }
-        lines.splice(insertAt, 0, newLine);
-        return lines.join("\n");
-      }
-
-
-      /**
-       * Renders the Issue body from card state. Note this is a one-way
-       * projection — it's regenerated from the card on every sync, so any
-       * edits made directly to the Issue body on github.com get overwritten
-       * on the next save. Due date has no Issue-native equivalent (GitHub
-       * Issues don't have a due-date field), so it's included here as plain
-       * text for visibility, same as the original MVP proposal's decision
-       * to keep dueDate planner-only.
-       */
-      function buildIssueBody(card) {
-        const meta = [
-          card.priority ? `**Priority:** ${priorityLabel(card.priority)}` : null,
-          card.category ? `**Category:** ${categoryLabel(card.category)}` : null,
-          card.dueDate ? `**Due:** ${card.dueDate}` : null,
-        ].filter(Boolean).join("  \n");
-
-        return [
-          meta || null,
-          meta ? "\n---\n" : null,
-          card.description || "_No description._",
-          "\n---",
-          "_This Issue is a mirror of a planner card and is rebuilt from the card on every save. Edit the card in the planner, not here — direct edits to this Issue won't be reflected back._",
-        ].filter((line) => line !== null).join("\n");
-      }
-
       /**
        * Thin wrapper over the browser's native SpeechRecognition API. No
        * dependency, no CDN — Chrome/Edge support it well; Firefox/Safari
@@ -2361,69 +2151,12 @@
         return { supported, listening, interimText, error, start, stop };
       }
 
-      /**
-       * Renders a description's markdown checklist as interactive checkboxes.
-       * Toggling or adding an item writes the updated markdown straight back
-       * through `onChange` — the parent owns `description` as the single
-       * source of truth, this component never keeps its own copy of it.
-       */
-      function ChecklistField({ description, onChange }) {
-        const [newItemText, setNewItemText] = useState("");
-        const items = parseChecklist(description);
-        const doneCount = items.filter((item) => item.checked).length;
-
-        const handleAdd = () => {
-          if (!newItemText.trim()) return;
-          onChange(addChecklistItem(description, newItemText));
-          setNewItemText("");
-        };
-
-        return (
-          <div className="field">
-            <div className="field-header">
-              <label>Checklist</label>
-              {items.length > 0 && (
-                <span className="checklist-progress">{doneCount}/{items.length} done</span>
-              )}
-            </div>
-
-            {items.length > 0 && (
-              <div className="checklist-items">
-                {items.map((item) => (
-                  <label key={item.line} className={`checklist-item${item.checked ? " checked" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={item.checked}
-                      onChange={() => onChange(toggleChecklistLine(description, item.line))}
-                    />
-                    <span>{item.text || <em>(empty item)</em>}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-
-            <div className="checklist-add-row">
-              <input
-                value={newItemText}
-                onChange={(e) => setNewItemText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
-                placeholder="Add a checklist item…"
-              />
-              <button type="button" onClick={handleAdd}>+</button>
-            </div>
-          </div>
-        );
-      }
-
       function CardDetailModal({ card, collaborators, repo, onSave, onDelete, onClose }) {
         const [title, setTitle] = useState(card.title);
         const [description, setDescription] = useState(card.description || "");
         const [status, setStatus] = useState(card.status);
         const [tagsText, setTagsText] = useState((card.tags || []).join(", "));
         const [assignee, setAssignee] = useState(card.assignee || "");
-        const [priority, setPriority] = useState(card.priority || "");
-        const [category, setCategory] = useState(card.category || "");
-        const [dueDate, setDueDate] = useState(card.dueDate || "");
 
         const appendToDescription = useCallback((text) => {
           setDescription((prev) => (prev && !prev.endsWith(" ") ? prev + " " : prev) + text.trim());
@@ -2439,9 +2172,6 @@
             status,
             tags,
             assignee: assignee || null,
-            priority: priority || null,
-            category: category || null,
-            dueDate: dueDate || null,
             updatedAt: new Date().toISOString(),
           });
         };
@@ -2487,8 +2217,6 @@
                 {speech.error && <div className="speech-error">{speech.error}</div>}
               </div>
 
-              <ChecklistField description={description} onChange={setDescription} />
-
               <div className="row-2">
                 <div className="field">
                   <label>Status</label>
@@ -2506,52 +2234,25 @@
                       <option key={login} value={login}>{login}</option>
                     ))}
                   </select>
-                  {card.issueNumber && (
+                  {card.trackingIssueNumber && repo && (
                     <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "6px 0 0" }}>
-                      Mirrored to{" "}
+                      Notified via{" "}
                       <a
                         className="verify-link"
-                        href={card.issueUrl || `https://github.com/${repo.owner}/${repo.name}/issues/${card.issueNumber}`}
+                        href={`https://github.com/${repo.owner}/${repo.name}/issues/${card.trackingIssueNumber}`}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        issue #{card.issueNumber}
+                        issue #{card.trackingIssueNumber}
                       </a>
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="row-2">
-                <div className="field">
-                  <label>Priority</label>
-                  <select className="status-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
-                    <option value="">None</option>
-                    {Object.values(Priority).map((p) => (
-                      <option key={p} value={p}>{priorityLabel(p)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Category</label>
-                  <select className="status-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="">None</option>
-                    {Object.values(Category).map((c) => (
-                      <option key={c} value={c}>{categoryLabel(c)}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="row-2">
-                <div className="field">
-                  <label>Tags (comma-separated)</label>
-                  <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="e.g. art, audio, urgent" />
-                </div>
-                <div className="field">
-                  <label>Due Date</label>
-                  <input type="date" className="status-select" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                </div>
+              <div className="field">
+                <label>Tags (comma-separated)</label>
+                <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="e.g. art, audio, urgent" />
               </div>
 
               <div className="modal-footer">
@@ -2637,19 +2338,9 @@
                           onDragEnd={handleDragEnd}
                           onClick={() => setSelectedCardId(cardId)}
                         >
-                          {(card.tags && card.tags.length > 0) || card.assignee || parseChecklist(card.description).length > 0 ? (
+                          {(card.tags && card.tags.length > 0) || card.assignee ? (
                             <div className="card-meta-row">
                               {(card.tags || []).map((tag) => <span key={tag} className="tag-pill">{tag}</span>)}
-                              {(() => {
-                                const items = parseChecklist(card.description);
-                                if (items.length === 0) return null;
-                                const done = items.filter((i) => i.checked).length;
-                                return (
-                                  <span className={`checklist-badge${done === items.length ? " complete" : ""}`}>
-                                    ☑ {done}/{items.length}
-                                  </span>
-                                );
-                              })()}
                               {card.assignee && <span className="avatar-badge" title={card.assignee}>{card.assignee.slice(0, 2).toUpperCase()}</span>}
                             </div>
                           ) : null}
@@ -2848,7 +2539,7 @@
       }
 
       function ProjectShell({ repo, storage, onBack }) {
-        const { loading, error, workspace, project, dirty, saving, conflicts, pulling, lastPulledAt, issueSyncError } = useWorkspace(storage, repo);
+        const { loading, error, workspace, project, dirty, saving, conflicts, pulling, lastPulledAt, notifyError } = useWorkspace(storage, repo);
         const [view, setView] = useState("dashboard"); // dashboard | board | team
         const [collaboratorLogins, setCollaboratorLogins] = useState([]);
 
@@ -2913,8 +2604,8 @@
                     <button onClick={() => workspace.resolveAllConflicts()}>Reload</button>
                   </div>
                 )}
-                {issueSyncError && (
-                  <div className="error-box" style={{ marginBottom: 0 }}>{issueSyncError}</div>
+                {notifyError && (
+                  <div className="error-box" style={{ marginBottom: 0 }}>{notifyError}</div>
                 )}
                 <span className={`sync-status${pulling ? " pulling" : ""}`}>
                   {pulling ? (
